@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Keyboard Warrior - Solo Mode</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: { fontFamily: { sans: ['Inter','sans-serif'] }, colors: { 'neon-cyan': '#00ffcc', 'neon-pink': '#ff33cc' } } }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <style>
+        body { font-family:'Inter',sans-serif; background-color:#000; overflow:hidden; user-select:none; }
+        
+        /* Game Area Style */
+        #game-container { position:relative; width:100vw; height:100vh; background: radial-gradient(circle at center, #0a0a0a 0%, #000000 80%); }
+        
+        /* Falling Word Style */
+        .falling-word { position:absolute; top:0; left:50%; transform:translateX(-50%); 
+            padding:0.5rem 1rem; border:2px solid #00ffcc; border-radius:6px; 
+            color:#00ffcc; background:rgba(0,0,0,0.7); font-weight:700; font-size:1.5rem; 
+            text-shadow:0 0 5px #00ffcc; box-shadow:0 0 10px rgba(0,255,204,0.5); 
+            transition:opacity 0.3s, transform 0.3s, background-color 0.3s, box-shadow 0.3s; white-space:nowrap;
+            z-index: 10; /* Mas mababa sa HUD para nasa likod lang sila */
+        }
+
+        .falling-word.hit { /* Style for matched word (Neon Pink Glow, then disappear) */
+            color: transparent; 
+            background-color:rgba(255,51,204,0.1); 
+            border-color:#ff33cc;
+            box-shadow:0 0 20px #ff33cc, 0 0 40px rgba(255,51,204,0.8); 
+            transform: scale(1.1); 
+            opacity:0; 
+        }
+        
+        /* Correctly Typed Letter Style */
+        .falling-word .typed { color:#ff33cc; text-decoration:underline; font-weight:900; }
+
+        /* HUD - Lives and Score */
+        /* Updated: Added background and borders so words behind are hidden/masked */
+        #hud-area { 
+            position:absolute; top:1rem; left:1rem; right:1rem; 
+            display:flex; justify-content:space-between; align-items:flex-start; 
+            z-index:20; 
+        }
+        
+        .hud-panel {
+            background: rgba(0, 0, 0, 0.9); /* Opaque background para di kita yung word sa likod */
+            border: 1px solid #00ffcc;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.2);
+            color: #00ffcc;
+            font-weight: 700;
+        }
+
+        #score-lives-container { display:flex; flex-direction:column; align-items:flex-start; min-width: 150px; }
+        
+        /* Updated: Same size for Score and Lives */
+        #score-display { font-size:1.5rem; margin-bottom:0.25rem; display: flex; justify-content: space-between; width: 100%; }
+        #lives-indicator { font-size:1.5rem; color:#ff33cc; display: flex; justify-content: space-between; width: 100%; align-items: center; }
+        #lives-indicator .life { color:#ff33cc; margin-left:0.25rem; text-shadow:0 0 3px #ff33cc; font-size: 1.25rem; }
+
+        /* Pause Button */
+        #pause-button { cursor:pointer; font-size:2rem; color:#00ffcc; transition:color 0.2s, text-shadow 0.2s; text-shadow:0 0 8px #00ffcc; margin-right: 10px; }
+        #pause-button:hover { color:#fff; text-shadow:0 0 15px #fff; }
+        
+        /* Input Area at the bottom */
+        #input-area { position:fixed; bottom:0; left:0; width:100%; padding:1rem; background:rgba(0,0,0,0.8); border-top:2px solid #00ffcc; z-index:20; }
+        #typing-input { width:100%; padding:0.75rem; background-color:#111; border:2px solid #00ffcc; color:#00ffcc; 
+            border-radius:8px; outline:none; font-size:1.5rem; text-align:center; transition:all 0.2s;
+            box-shadow:0 0 10px rgba(0,255,204,0.6); 
+        }
+        #typing-input:focus { border-color:#ff33cc; box-shadow:0 0 15px #ff33cc; } 
+
+        /* Notifier/Modal (Game Over, Tutorial, Pause Menu) */
+        #notifier-modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); 
+            z-index:100; display:flex; justify-content:center; align-items:center; }
+        .notifier-content { background-color:#0d0d0d; border:3px solid #00ffcc; padding:2rem; border-radius:12px; 
+            max-width:450px; width:90%; text-align:center; color:#fff; box-shadow:0 0 30px #00ffcc; }
+        .notifier-content h2 { font-size:2rem; font-weight:900; margin-bottom:1rem; color:#00ffcc; text-shadow:0 0 5px #00ffcc; }
+        .notifier-content p { margin-bottom:1.5rem; line-height:1.5; }
+        .neon-button { padding:0.75rem 2rem; font-weight:700; text-transform:uppercase; border-radius:6px; cursor:pointer; transition:all .3s ease; margin:0 0.5rem; }
+        
+        /* --- Button Styles Updated --- */
+
+        /* OK / RESUME Button (Cyan Fill) */
+        .btn-fill-cyan { background-color:#00ffcc; color:#000; border:2px solid #00ffcc; }
+        .btn-fill-cyan:hover { box-shadow:0 0 15px #00ffcc; color: #000; }
+
+        /* START Button (Outline first, Fill on hover) */
+        .btn-start-outline { background-color:transparent; color:#00ffcc; border:2px solid #00ffcc; }
+        .btn-start-outline:hover { background-color:#00ffcc; color:#000; box-shadow:0 0 20px #00ffcc; }
+
+        /* Standard Outline Cyan */
+        .btn-outline-cyan { background-color:transparent; color:#00ffcc; border:2px solid #00ffcc; }
+        .btn-outline-cyan:hover { background-color:#00ffcc; color:#000; box-shadow:0 0 15px #00ffcc; }
+
+        /* Pink Outline (Maintained for Pause Restart, but removed from Game Over) */
+        .btn-outline-pink { background-color:transparent; color:#ff33cc; border:2px solid #ff33cc; }
+        .btn-outline-pink:hover { background-color:#ff33cc; color:#000; box-shadow:0 0 15px #ff33cc; }
+    </style>
+</head>
+<body>
+    
+    <audio id="background-music" loop>
+        <source src="backgroundmusic.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="pop-sound">
+        <source src="popsound.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="game-container">
+        
+        <div id="hud-area">
+            <div class="hud-panel" style="display:flex; align-items:center;">
+                <i class="fas fa-pause-circle" id="pause-button" title="Pause Game"></i>
+            </div>
+
+            <div class="hud-panel" id="score-lives-container">
+                <div id="score-display">SCORE: <span id="current-score">0</span></div>
+                <div id="lives-indicator">LIVES: 
+                    <div>
+                        <i class="fas fa-heart life" id="life-1"></i>
+                        <i class="fas fa-heart life" id="life-2"></i>
+                        <i class="fas fa-heart life" id="life-3"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="input-area">
+            <input type="text" id="typing-input" placeholder="Start typing here..." autocomplete="off" autofocus>
+        </div>
+
+        <div id="notifier-modal">
+            
+            <div class="notifier-content" id="tutorial-content">
+                <h2>WELCOME TO PRACTICE MODE</h2>
+                <p>The goal is to type the words as they fall. You must type them before they hit the bottom.</p>
+                <p>● If a word falls, you will lose a life.</p>
+                <p>● Words get longer as your score increases.</p>
+                <button class="neon-button btn-start-outline" id="start-game-button">OK, START!</button>
+            </div>
+            
+            <div class="notifier-content hidden" id="game-over-content">
+                <h2>GAME OVER!</h2>
+                <p>Your final score is: <span id="final-score" class="font-bold text-neon-cyan text-2xl">0</span></p>
+                <p id="high-score-message" class="text-neon-cyan font-bold">Try again!</p>
+                <div class="flex justify-center mt-4">
+                    <button class="neon-button btn-outline-cyan" id="restart-game-button-go">RESTART</button>
+                    <button class="neon-button btn-outline-cyan" onclick="window.location.href='dashboard.html'">QUIT</button>
+                </div>
+            </div>
+
+            <div class="notifier-content hidden" id="pause-menu-content">
+                <h2>PAUSE</h2>
+                <p>The game is currently paused.</p>
+                <div class="flex justify-center mt-4">
+                    <button class="neon-button btn-fill-cyan" id="resume-game-button">RESUME</button>
+                    <button class="neon-button btn-outline-pink" id="restart-game-button-pause">RESTART</button>
+                    <button class="neon-button btn-outline-cyan" onclick="window.location.href='dashboard.html'">QUIT</button>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        // --- MUSIC PREFERENCE KEY ---
+        const MUSIC_PREF_KEY = 'kw_music_enabled';
+        // --- 2. EXPANDED WORD LIST (approx 300 words, mixed lengths) ---
+        const WORD_LIST = [
+            // 3-4 Letters
+            'cat','dog','run','sky','box','joy','mix','zap','cup','hat','red','one','two','six','ten',
+            'ace','bet','cry','dry','eat','fly','gem','hug','ice','jam','key','law','map','net','owl',
+            'pen','quip','ray','sun','toy','urn','vet','web','yes','zoo','acid','base','byte','code',
+            'data','edge','file','grid','host','icon','java','kill','link','mode','node','open','path',
+            'quit','root','save','tech','user','view','wifi','zone','army','baby','call','dark','easy',
+            'face','game','hard','idea','jump','keep','lamp','mind','name','over','page','quiz','rain',
+            'safe','team','unit','vain','walk','year','zero','bolt','dash','echo','flux','gear','halo',
+            'iron','jolt','knot','loop','mars','neon','orbit','pump','quad','rust','scan','tool','void',
+            'warp','xray','yoga','zinc','area','book','city','door','exit','farm','girl','home','item',
+            // 5-6 Letters
+            'apple','basic','cache','debug','enter','flash','gnome','html','image','joker','knife',
+            'laser','mouse','night','ocean','pixel','quest','robot','space','table','unity','virus',
+            'world','xenon','youth','zebra','admin','batch','click','drive','email','fatal','glitch',
+            'hacker','input','layer','macro','native','object','patch','query','reset','script','token',
+            'update','vector','widget','access','binary','client','daemon','escape','folder','global',
+            'header','inject','kernel','laptop','memory','network','output','packet','random','server',
+            'target','upload','visual','window','zipper','action','battle','castle','danger','energy',
+            'family','galaxy','hammer','island','jungle','knight','legend','master','number','office',
+            'planet','rocket','shield','temple','unique','valley','weapon','yellow','zombie','cloud',
+            'storm','water','flame','earth','sound','music','video','audio','radio','press','print',
+            'logic','power','speed','force','field','spawn','level','score','lives','stage','boss',
+            // 7+ Letters
+            'amazing','browser','command','desktop','element','firewall','gateway','hardware','internet',
+            'javascript','keyboard','language','monitor','notebook','offline','platform','quality','runtime',
+            'scanner','terminal','upgrade','virtual','wireless','xmlhttp','youtube','absolute','backbone',
+            'compiler','database','ethernet','function','gigabyte','hostname','interface','junction','keyword',
+            'loopback','malware','nickname','operator','password','protocol','register','security','template',
+            'username','variable','workload','algorithm','bandwidth','clipboard','dashboard','encryption',
+            'framework','groupware','hyperlink','iteration','journaling','knowledge','localhost','mainframe',
+            'navigation','optimizer','processor','querying','resolution','software','technology','undefined',
+            'validator','webmaster','xylophone','zpetabyte','adventure','challenge','destroyer','education',
+            'fantastic','generation','happiness','imagination','judgement','kaleidoscope','landscape','management',
+            'narrative','operation','perfection','questions','rebellion','satellite','telescope','universe',
+            'victory','warriors','yesterday','zoologist','building','calendar','document','engineer',
+            'graduate','hospital','industry','journey','kingdom','learning','machine','november','painting'
+        ];
+        
+        const GAME_CONTAINER = document.getElementById('game-container');
+        const TYPING_INPUT = document.getElementById('typing-input');
+        const SCORE_DISPLAY = document.getElementById('current-score');
+        const LIFE_ELEMENTS = [
+            document.getElementById('life-1'),
+            document.getElementById('life-2'),
+            document.getElementById('life-3')
+        ];
+        const NOTIFIER_MODAL = document.getElementById('notifier-modal');
+        const TUTORIAL_CONTENT = document.getElementById('tutorial-content');
+        const GAME_OVER_CONTENT = document.getElementById('game-over-content');
+        const PAUSE_MENU_CONTENT = document.getElementById('pause-menu-content');
+        const PAUSE_BUTTON = document.getElementById('pause-button');
+
+        const BGM = document.getElementById('background-music');
+        const POP_SOUND = document.getElementById('pop-sound');
+
+        let words = [];
+        let score = 0;
+        let lives = 3;
+        let gameRunning = false;
+        let gamePaused = false; 
+        let animationFrameId;
+        let lastTime = 0;
+        let wordSpawnTimer = 0;
+
+        let baseFallSpeed = 0.05; 
+        let baseSpawnRate = 1800; 
+        let currentFallSpeed = baseFallSpeed;
+        let currentSpawnRate = baseSpawnRate;
+
+        // --- NEW: Function to check and control music
+        function controlBackgroundMusic(playAttempt) {
+            // Basahin ang preference mula sa localStorage (default to 'true' if null)
+            const musicEnabled = localStorage.getItem(MUSIC_PREF_KEY) !== 'false';
+            
+            if (musicEnabled && playAttempt) {
+                // Try to play (can fail if browser blocks autoplay before user interaction)
+                BGM.play().catch(e => console.log('BGM Autoplay Blocked:', e));
+            } else {
+                BGM.pause();
+                BGM.currentTime = 0;
+            }
+        }
+        // --- END OF NEW MUSIC FUNCTION ---
+
+        // --- NEW: Difficulty Logic for Word Length ---
+        function generateRandomWord() {
+            // Determine length range based on score
+            let minLen = 0;
+            let maxLen = 100;
+
+            if (score < 10) {
+                // START: 4 letters or below (Easy)
+                minLen = 1; 
+                maxLen = 4;
+            } else if (score < 30) {
+                // MID: 5 to 6 letters (Medium)
+                minLen = 5;
+                maxLen = 6;
+            } else {
+                // HIGH: 7 letters and up (Hard)
+                minLen = 7;
+                maxLen = 20;
+            }
+
+            // Filter the master list
+            const filteredList = WORD_LIST.filter(w => w.length >= minLen && w.length <= maxLen);
+            
+            // Fallback if list is empty (shouldn't happen with big list, but good safety)
+            const listToUse = filteredList.length > 0 ? filteredList : WORD_LIST;
+
+            return listToUse[Math.floor(Math.random() * listToUse.length)];
+        }
+
+        function playPopSound() {
+            if (POP_SOUND) {
+                POP_SOUND.currentTime = 0; 
+                POP_SOUND.play().catch(e => console.log('Pop sound blocked'));
+            }
+        }
+
+        function createFallingWord() {
+            const wordText = generateRandomWord();
+            const wordElement = document.createElement('div');
+            wordElement.className = 'falling-word';
+            wordElement.textContent = wordText;
+            wordElement.dataset.word = wordText;
+            
+            const containerWidth = GAME_CONTAINER.clientWidth;
+            // Ensure words don't spawn too close to edges
+            const xPos = Math.random() * (containerWidth - 250) + 125; 
+            
+            // Start slightly higher off screen
+            const startY = -60;
+
+            wordElement.style.left = `${xPos}px`;
+            wordElement.style.top = `${startY}px`; 
+
+            GAME_CONTAINER.appendChild(wordElement);
+
+            words.push({
+                element: wordElement,
+                word: wordText,
+                typed: '',
+                y: startY,
+                isDestroyed: false,
+                initialSpeed: currentFallSpeed,
+            });
+        }
+        
+        function updateHUD() {
+            SCORE_DISPLAY.textContent = score;
+            LIFE_ELEMENTS.forEach((lifeEl, index) => {
+                lifeEl.style.color = index < lives ? '#ff33cc' : '#333';
+            });
+        }
+        
+        function updateDifficulty() {
+            // Increase speed slightly every 5 points
+            if (score % 5 === 0 && score > 0) {
+                currentFallSpeed = baseFallSpeed + (score * 0.002);
+                currentSpawnRate = Math.max(800, baseSpawnRate - (score * 20));
+            }
+        }
+        
+        function loseLife() {
+            lives--;
+            updateHUD();
+            if (lives <= 0) {
+                gameOver();
+            } else {
+                GAME_CONTAINER.style.backgroundColor = 'rgba(255,0,51,0.3)';
+                setTimeout(() => GAME_CONTAINER.style.backgroundColor = '#000', 150);
+            }
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            cancelAnimationFrame(animationFrameId);
+            TYPING_INPUT.disabled = true;
+            
+            // Pausahin ang music
+            controlBackgroundMusic(false);
+            
+            document.getElementById('final-score').textContent = score;
+            
+            const messageEl = document.getElementById('high-score-message');
+            if (score > 50) messageEl.textContent = 'Excellent! You are a Warrior.';
+            else if (score > 20) messageEl.textContent = 'Great job! Getting faster.';
+            else messageEl.textContent = 'Practice makes perfect!';
+            
+            TUTORIAL_CONTENT.classList.add('hidden');
+            PAUSE_MENU_CONTENT.classList.add('hidden');
+            GAME_OVER_CONTENT.classList.remove('hidden');
+            NOTIFIER_MODAL.style.display = 'flex';
+        }
+
+        function pauseGame() {
+            if (!gameRunning || gamePaused) return;
+            gamePaused = true;
+            cancelAnimationFrame(animationFrameId);
+            TYPING_INPUT.disabled = true;
+            
+            // Pausahin ang music
+            controlBackgroundMusic(false);
+            
+            TUTORIAL_CONTENT.classList.add('hidden');
+            GAME_OVER_CONTENT.classList.add('hidden');
+            PAUSE_MENU_CONTENT.classList.remove('hidden');
+            NOTIFIER_MODAL.style.display = 'flex';
+        }
+
+        function resumeGame() {
+            if (!gameRunning || !gamePaused) return;
+            gamePaused = false;
+            TYPING_INPUT.disabled = false;
+            TYPING_INPUT.focus();
+            
+            // Ituloy ang music
+            controlBackgroundMusic(true);
+
+            NOTIFIER_MODAL.style.display = 'none';
+            lastTime = performance.now(); 
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop(time) {
+            if (!gameRunning || gamePaused) return;
+
+            const deltaTime = time - lastTime;
+            lastTime = time;
+            
+            const containerHeight = GAME_CONTAINER.clientHeight;
+
+            words.forEach(wordObj => {
+                if (wordObj.isDestroyed) return;
+
+                wordObj.y += wordObj.initialSpeed * deltaTime;
+                wordObj.element.style.top = `${wordObj.y}px`;
+
+                // If word hits bottom
+                if (wordObj.y > containerHeight - 80) { // -80 buffer for input area
+                    wordObj.isDestroyed = true;
+                    wordObj.element.remove();
+                    loseLife();
+                }
+            });
+
+            words = words.filter(wordObj => !wordObj.isDestroyed);
+
+            wordSpawnTimer += deltaTime;
+            if (wordSpawnTimer >= currentSpawnRate) {
+                createFallingWord();
+                wordSpawnTimer = 0; 
+            }
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+        
+        function startGame() {
+            words.forEach(w => w.element.remove()); 
+            words = [];
+            score = 0;
+            lives = 3;
+            currentFallSpeed = baseFallSpeed;
+            currentSpawnRate = baseSpawnRate;
+            gamePaused = false; 
+            
+            updateHUD();
+            TYPING_INPUT.value = '';
+            TYPING_INPUT.disabled = false;
+            TYPING_INPUT.focus();
+            
+            NOTIFIER_MODAL.style.display = 'none';
+            TUTORIAL_CONTENT.classList.remove('hidden'); 
+            GAME_OVER_CONTENT.classList.add('hidden');
+            PAUSE_MENU_CONTENT.classList.add('hidden');
+            
+            // Simulan ang music base sa preference
+            controlBackgroundMusic(true);
+
+            gameRunning = true;
+            lastTime = performance.now();
+            wordSpawnTimer = currentSpawnRate * 0.5; 
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- Input Handling ---
+        function handleInput() {
+            if (!gameRunning || gamePaused) return;
+
+            const inputVal = TYPING_INPUT.value.trim().toLowerCase();
+            if (!inputVal) return;
+
+            let bestMatchIndex = -1;
+            let bestMatchLength = -1;
+            let closestY = -1000;
+
+            // Find best matching word 
+            words.forEach((wordObj, index) => {
+                if (wordObj.isDestroyed) return;
+                const wordLower = wordObj.word.toLowerCase();
+                
+                if (wordLower.startsWith(inputVal)) {
+                    if (inputVal.length > bestMatchLength) {
+                        bestMatchIndex = index;
+                        bestMatchLength = inputVal.length;
+                    }
+                }
+            });
+            
+            if (bestMatchIndex !== -1) {
+                const matchedWordObj = words[bestMatchIndex];
+                matchedWordObj.typed = inputVal;
+                
+                const remaining = matchedWordObj.word.substring(inputVal.length);
+                matchedWordObj.element.innerHTML = `<span class="typed">${inputVal}</span>${remaining}`;
+
+                if (inputVal.length === matchedWordObj.word.length) {
+                    matchedWordObj.isDestroyed = true;
+                    matchedWordObj.element.classList.add('hit'); 
+                    setTimeout(() => matchedWordObj.element.remove(), 300); 
+                    
+                    score++;
+                    updateHUD();
+                    updateDifficulty(); 
+                    playPopSound(); 
+
+                    TYPING_INPUT.value = ''; 
+                    TYPING_INPUT.focus();
+                }
+            } else {
+                TYPING_INPUT.style.borderColor = '#ff0000';
+                TYPING_INPUT.style.boxShadow = '0 0 15px #ff0000';
+                setTimeout(() => {
+                    TYPING_INPUT.style.borderColor = '#00ffcc';
+                    TYPING_INPUT.style.boxShadow = '0 0 10px rgba(0,255,204,0.4)';
+                }, 100);
+            }
+        }
+        
+        document.getElementById('start-game-button').addEventListener('click', startGame);
+        document.getElementById('restart-game-button-go').addEventListener('click', startGame); 
+        document.getElementById('restart-game-button-pause').addEventListener('click', startGame); 
+        document.getElementById('resume-game-button').addEventListener('click', resumeGame); 
+        PAUSE_BUTTON.addEventListener('click', pauseGame); 
+        TYPING_INPUT.addEventListener('input', handleInput);
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (gameRunning && !gamePaused) pauseGame();
+                else if (gameRunning && gamePaused) resumeGame();
+            }
+        });
+
+        // --- INIBAHIN: INITIALIZATION LOGIC ---
+        window.addEventListener('load', () => {
+            NOTIFIER_MODAL.style.display = 'flex';
+            TUTORIAL_CONTENT.classList.remove('hidden');
+            GAME_OVER_CONTENT.classList.add('hidden');
+            PAUSE_MENU_CONTENT.classList.add('hidden');
+            TYPING_INPUT.disabled = true;
+
+            // NEW: I-stop agad ang music kung naka-off ang preference sa settings
+            controlBackgroundMusic(false); 
+        });
+
+        // NEW: Para sa mga browser na nagba-block ng autoplay, simulan ang music sa unang click
+        document.addEventListener('click', () => {
+            // Kung hindi pa nag-start ang game at naka-on ang music preference
+            const musicEnabled = localStorage.getItem(MUSIC_PREF_KEY) !== 'false';
+            if(musicEnabled && BGM.paused && !gameRunning) {
+                BGM.play().catch(()=>{});
+            }
+        }, { once: true });
+        // --- END NG PAGBABAGO ---
+    </script>
+</body>
+</html>

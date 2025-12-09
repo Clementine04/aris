@@ -1,0 +1,246 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Keyboard Warrior - Start</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter','sans-serif'] },
+                    colors: { 'neon-cyan': '#00ffcc', 'neon-pink': '#ff33cc' }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* Global + Background (exact same look used in other pages) */
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at center, #050505 0%, #000000 80%);
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            min-height:100vh;
+            margin:0;
+            overflow:hidden;
+        }
+        #matrix-container {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            pointer-events:none; z-index:0;
+        }
+        .particle { position:absolute; transition:opacity .5s ease-out; pointer-events:none; user-select:none; opacity:.9; transform:translate3d(0,0,0); }
+        .square { display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:8px; font-size:18px; font-weight:700; transition:all .3s ease; }
+
+        /* Logo (same size as Start Page) */
+        .logo-view-wrapper { display:flex; flex-direction:column; align-items:center; padding:2rem; z-index:10; position:relative; margin-top:-50px; }
+        .text-row { display:flex; gap:.75rem; margin-bottom:.75rem; justify-content:center; }
+        .letter-box {
+            display:flex; justify-content:center; align-items:center;
+            width:4rem; height:4rem; font-size:2rem; font-weight:900;
+            background-color:#000; border:2px solid currentColor; border-radius:6px;
+            text-shadow:0 0 8px rgba(255,255,255,.8), 0 0 5px currentColor;
+            transition:all .4s ease; position:relative; overflow:hidden; z-index:1;
+            animation: subtle-pulse 2s infinite alternate ease-in-out;
+        }
+        @keyframes subtle-pulse {
+            0%{ box-shadow:0 0 5px currentColor,0 0 10px currentColor; transform:scale(1); }
+            100%{ box-shadow:0 0 10px currentColor,0 0 15px currentColor; transform:scale(1.01); }
+        }
+        .keyboard-letter { color:#00ffcc; border-color:#00ffcc; }
+        .warrior-letter { color:#ff33cc; border-color:#ff33cc; }
+        .letter-box:hover, .letter-box.active-glow {
+            box-shadow: inset 0 0 20px currentColor, 0 0 15px currentColor, 0 0 25px currentColor;
+            transform:scale(1.05); animation:none;
+        }
+
+        /* Buttons under logo: stacked (Log In above Create Account) */
+        .buttons-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+            width: 100%;
+            margin-top: 2.5rem;
+        }
+
+        .action-btn {
+            padding:.75rem 2rem;
+            font-size:1.25rem;
+            font-weight:900;
+            border-radius:8px;
+            cursor:pointer;
+            text-transform:uppercase;
+            color:#00ffcc; border:2px solid #00ffcc; background:#000;
+            transition:all .25s ease; z-index:10; position:relative;
+            box-shadow:0 0 5px rgba(0,255,204,.06);
+            width: 260px; /* consistent width when stacked */
+            text-align: center;
+        }
+        .action-btn:hover { box-shadow: 0 0 10px #00ffcc, 0 0 15px #ff33cc; transform:scale(1.03); }
+
+        @media (max-width:640px) {
+            body { padding: 15px; }
+            .letter-box { width:2.5rem; height:2.5rem; font-size:1.25rem; border-radius:4px; }
+            .text-row { gap: 0.4rem; margin-bottom: 0.4rem; }
+            .action-btn { padding:.6rem 1.25rem; font-size:1rem; width: 100%; max-width: 260px; }
+            .logo-view-wrapper { margin-top: 0; padding: 1rem; }
+            .buttons-column { gap: 0.75rem; margin-top: 2rem; }
+        }
+        
+        @media (max-width:380px) {
+            .letter-box { width:2rem; height:2rem; font-size:1rem; }
+            .text-row { gap: 0.3rem; }
+            .action-btn { font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="matrix-container"></div>
+
+    <div id="logo-view" class="logo-view-wrapper">
+        <div class="logo-text-area">
+            <div id="keyboard-row" class="text-row"></div>
+            <div id="warrior-row" class="text-row"></div>
+        </div>
+
+        <!-- stacked buttons: Create Account is now BELOW the Log In button -->
+        <div class="buttons-column">
+            <button id="loginBtn" class="action-btn" onclick="location.href='login.html'">Log In</button>
+            <button id="createBtn" class="action-btn" onclick="location.href='create.html'">Create Account</button>
+        </div>
+    </div>
+
+    <!-- Particle + Logo JS (identical behavior to other pages) -->
+    <script>
+        const container = document.getElementById('matrix-container');
+        const particles = [];
+        const PARTICLE_COUNT = 100;
+        const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const FALL_SPEED_BASE = 0.05;
+        const REPEL_RADIUS = 180;
+        const REPEL_STRENGTH = 0.8;
+        const DAMPING_FACTOR = 0.98;
+        const GLOW_COLORS = [
+            { background: 'rgba(0,255,240,0.2)', shadow: '0 0 10px rgba(0,255,240,0.6)' },
+            { background: 'rgba(255,0,255,0.2)', shadow: '0 0 10px rgba(255,0,255,0.6)' },
+            { background: 'rgba(0,255,128,0.2)', shadow: '0 0 10px rgba(0,255,128,0.6)' },
+            { background: 'rgba(255,215,0,0.2)', shadow: '0 0 10px rgba(255,215,0,0.6)' },
+            { background: 'rgba(200,150,255,0.2)', shadow: '0 0 10px rgba(200,150,255,0.6)' },
+        ];
+        let mousePos = { x:-1000, y:-1000 };
+        let interactiveElements = [];
+
+        class Particle {
+            constructor(x,y,letter){
+                this.x=x; this.y=y; this.vx=0; this.vy=FALL_SPEED_BASE; this.letter=letter;
+                this.colorScheme = GLOW_COLORS[Math.floor(Math.random()*GLOW_COLORS.length)];
+                this.element = document.createElement('div');
+                this.element.className = 'particle';
+                this.element.innerHTML = `<div class="square">${letter}</div>`;
+                container.appendChild(this.element);
+                const square = this.element.querySelector('.square');
+                square.style.backgroundColor = this.colorScheme.background;
+                square.style.boxShadow = this.colorScheme.shadow;
+                square.style.color = '#000';
+                this.updateDOM();
+            }
+            updateDOM(){ this.element.style.transform = `translate3d(${this.x}px, ${this.y}px, 0)`; }
+            update(deltaTime,width,height){
+                const dx = this.x - mousePos.x, dy = this.y - mousePos.y;
+                const distanceSq = dx*dx + dy*dy;
+                if (distanceSq < REPEL_RADIUS*REPEL_RADIUS){
+                    const distance = Math.sqrt(distanceSq) || 1;
+                    const force = (REPEL_RADIUS - distance)/REPEL_RADIUS * REPEL_STRENGTH;
+                    this.vx += dx/distance * force;
+                    this.vy += dy/distance * force;
+                }
+                this.vy += FALL_SPEED_BASE * 0.1;
+                this.vx *= DAMPING_FACTOR; this.vy *= DAMPING_FACTOR;
+                this.x += this.vx * deltaTime; this.y += this.vy * deltaTime;
+                if (this.y > height + 50){
+                    this.y = -50; this.x = Math.random()*width;
+                    this.letter = LETTERS[Math.floor(Math.random()*LETTERS.length)];
+                    this.colorScheme = GLOW_COLORS[Math.floor(Math.random()*GLOW_COLORS.length)];
+                    const square = this.element.querySelector('.square');
+                    square.textContent = this.letter;
+                    square.style.backgroundColor = this.colorScheme.background;
+                    square.style.boxShadow = this.colorScheme.shadow;
+                    square.style.color = '#000';
+                    this.vy = FALL_SPEED_BASE;
+                }
+                if (this.x < -50) this.x = width + 50;
+                if (this.x > width + 50) this.x = -50;
+                this.updateDOM();
+            }
+        }
+
+        const renderLetters = (word,id,className)=>{
+            const el = document.getElementById(id);
+            if (!el || el.children.length>0) return;
+            word.toUpperCase().split('').forEach(ch=>{
+                const box = document.createElement('div');
+                box.textContent = ch;
+                box.classList.add('letter-box', className);
+                el.appendChild(box);
+            });
+        };
+
+        let lastTime=0;
+        function animate(time){
+            if(!lastTime) lastTime=time;
+            const deltaTime = (time-lastTime)/16.666;
+            lastTime = time;
+            const width = window.innerWidth, height = window.innerHeight;
+            particles.forEach(p=>p.update(deltaTime, width, height));
+            requestAnimationFrame(animate);
+        }
+
+        function updateGlow(x,y){
+            const isTouch = ('ontouchstart' in window)||navigator.maxTouchPoints>0;
+            const hitboxExpansion = isTouch?25:0;
+            interactiveElements.forEach(el=>{
+                const rect = el.getBoundingClientRect();
+                const isOver = x >= rect.left - hitboxExpansion && x <= rect.right + hitboxExpansion &&
+                               y >= rect.top - hitboxExpansion && y <= rect.bottom + hitboxExpansion;
+                if(isOver){ if(isTouch || !el.matches(':hover')) el.classList.add('active-glow'); }
+                else el.classList.remove('active-glow');
+            });
+        }
+
+        function handleMouseMove(e){ mousePos = {x:e.clientX,y:e.clientY}; updateGlow(e.clientX,e.clientY); }
+        function handleTouchMove(e){ if(e.touches.length>0){ e.preventDefault(); const t=e.touches[0]; mousePos={x:t.clientX,y:t.clientY}; updateGlow(t.clientX,t.clientY);} }
+        function handleTouchEnd(){ mousePos={x:-1000,y:-1000}; interactiveElements.forEach(el=>el.classList.remove('active-glow')); }
+
+        function handleResize(){ clearTimeout(window.__resizeT); window.__resizeT=setTimeout(()=>initializeBackground(),250); }
+
+        let animationStarted=false;
+        function initializeBackground(){
+            renderLetters('KEYBOARD','keyboard-row','keyboard-letter');
+            renderLetters('WARRIOR','warrior-row','warrior-letter');
+            const keyboardLetters = document.querySelectorAll('#keyboard-row .letter-box');
+            const warriorLetters = document.querySelectorAll('#warrior-row .letter-box');
+            interactiveElements = [...keyboardLetters,...warriorLetters, document.getElementById('loginBtn'), document.getElementById('createBtn')];
+
+            particles.forEach(p=>p.element.remove());
+            particles.length=0;
+            const width = window.innerWidth, height=window.innerHeight;
+            for(let i=0;i<PARTICLE_COUNT;i++){
+                particles.push(new Particle(Math.random()*width, Math.random()*height, LETTERS[Math.floor(Math.random()*LETTERS.length)]));
+            }
+            if(!animationStarted){ requestAnimationFrame(animate); animationStarted=true; }
+        }
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('touchmove', handleTouchMove, { passive:false });
+        window.addEventListener('touchend', handleTouchEnd);
+        window.addEventListener('load', initializeBackground);
+        window.addEventListener('resize', handleResize);
+    </script>
+</body>
+</html>

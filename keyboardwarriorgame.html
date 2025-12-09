@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Keyboard Warrior - The Game</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="public/js/socket-client.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter','sans-serif'] },
+                    colors: { 'neon-cyan': '#00ffcc', 'neon-pink': '#ff33cc', 'neon-yellow': '#ffcc00' } 
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <style> 
+        /* Basic Game Styles */
+        * { box-sizing: border-box; }
+        body { background: #000; overflow: hidden; font-family: 'Inter', sans-serif; user-select: none; margin: 0; padding: 0; }
+        #game-container { position:relative; width:100%; height:100vh; height: 100dvh; overflow:hidden; background: radial-gradient(circle at center, #0a0a0a 0%, #000000 90%); }
+        
+        /* Game HUD Styles */
+        .game-hud {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 20;
+            background: rgba(0,0,0,0.9);
+            padding: 10px 15px;
+            border: 2px solid #ff33cc;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(255,51,204,0.5);
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 15px;
+        }
+        .hud-item { text-align: center; }
+        .hud-label { font-size: 0.65rem; font-weight: bold; letter-spacing: 1px; margin-bottom: 2px; }
+        .hud-value { font-size: 1.5rem; font-weight: 900; color: white; }
+        .hud-divider { width: 1px; height: 40px; background: rgba(255,51,204,0.5); }
+        .hud-opponent { text-align: center; border-left: 1px solid rgba(0,255,204,0.3); padding-left: 15px; }
+
+        /* --- FALLING WORDS STYLE --- */
+        .falling-word { 
+            position:absolute; top:0; left:50%; transform:translateX(-50%); 
+            padding: 0.4rem 0.8rem; border:2px solid #ff33cc; border-radius:6px; 
+            color:#ff33cc;
+            background:rgba(0,0,0,0.8); font-weight:700; font-size: 1.2rem; 
+            text-shadow:0 0 5px #ff33cc; box-shadow:0 0 10px rgba(255, 51, 204, 0.4); 
+            transition:all 0.1s; white-space:nowrap; z-index: 10;
+        }
+
+        /* Highlighted/Typed Letters (NEON CYAN) */
+        .falling-word .typed { 
+            color:#00ffcc; 
+            text-decoration:underline; 
+            text-shadow: 0 0 10px #00ffcc;
+            font-weight:900; 
+        }
+
+        /* Hit/Pop Effect */
+        .falling-word.hit {
+            transform: scale(1.3);
+            opacity: 0;
+            border-color: #00ffcc;
+            background-color: rgba(0, 255, 204, 0.2);
+            box-shadow: 0 0 30px #00ffcc;
+            transition: all 0.2s ease-out;
+        }
+
+        /* --- NOTIFIER MODALS (PINK THEME) --- */
+        #notifier-modal, #game-over-modal, #quit-modal { 
+            position:fixed; top:0; left:0; width:100%; height:100%; 
+            background:rgba(0,0,0,0.95); z-index:2000; display:flex; justify-content:center; align-items:center;
+            padding: 15px;
+        }
+        
+        .notifier-content {
+            background-color:#0d0d0d; 
+            border:3px solid #ff33cc;
+            padding: 1.5rem; border-radius:12px;
+            max-width:500px; width:100%; 
+            box-shadow:0 0 30px #ff33cc;
+            color:#fff; text-align:center;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .notifier-content h2 {
+            color: #ff33cc;
+            text-shadow: 0 0 10px #ff33cc;
+            font-size: 1.8rem;
+        }
+
+        /* BUTTON STYLES: Outline first, Fill on Hover */
+        .neon-button {
+            padding:.75rem 2rem; font-size:1.25rem; font-weight:900; border-radius:8px; cursor:pointer;
+            text-transform:uppercase; 
+            color:#ff33cc; border:2px solid #ff33cc; /* PINK BORDER & TEXT */
+            background:transparent; /* NO FILL INITIALLY */
+            transition:all .25s ease; box-shadow:0 0 5px #ff33cc;
+            display: inline-block; margin: 0.5rem;
+        }
+        
+        /* HOVER STATE: Fill Pink, Text Black */
+        .neon-button:hover {
+            background-color: #ff33cc;
+            color: #000;
+            box-shadow: 0 0 20px #ff33cc; transform:scale(1.05);
+        }
+
+        /* Input Area */
+        .input-area {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 15px;
+            z-index: 20;
+            background: linear-gradient(to top, rgba(0,0,0,0.95), transparent);
+        }
+        .game-input {
+            width: 100%;
+            padding: 12px 15px;
+            background: #000;
+            border: 2px solid #ff33cc;
+            color: #00ffcc;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 900;
+            border-radius: 10px;
+            outline: none;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px rgba(255,51,204,0.5);
+        }
+        .game-input:focus { border-color: #00ffcc; box-shadow: 0 0 20px rgba(0,255,204,0.5); }
+
+        /* Leaderboard Table Styles */
+        .leaderboard-table-container { 
+            max-height: 200px;
+            overflow-y: hidden; 
+            margin-bottom: 1.5rem; 
+        }
+        .leaderboard-table { width: 100%; border-collapse: collapse; }
+        .leaderboard-table th, .leaderboard-table td { 
+            padding: 8px 12px; text-align: left; border-bottom: 1px solid #333; 
+            font-family: 'Inter', sans-serif;
+        }
+        .leaderboard-table th { color: #ffcc00; font-weight: bold; }
+        .rank-1-color { color: #FFD700; text-shadow: 0 0 5px #FFD700; font-size: 1.25rem;} 
+        .rank-2-color { color: #C0C0C0; text-shadow: 0 0 5px #C0C0C0; } 
+        .rank-3-color { color: #CD7F32; text-shadow: 0 0 5px #CD7F32; } 
+        .current-player-row td { background-color: rgba(0, 255, 204, 0.1); border-color: #00ffcc; }
+
+        /* MOBILE RESPONSIVE */
+        @media (max-width: 640px) {
+            .game-hud {
+                top: 5px;
+                right: 5px;
+                left: 5px;
+                padding: 8px 10px;
+                gap: 10px;
+                justify-content: center;
+            }
+            .hud-label { font-size: 0.55rem; }
+            .hud-value { font-size: 1.2rem; }
+            .hud-divider { height: 30px; }
+            .falling-word { font-size: 1rem; padding: 0.3rem 0.6rem; }
+            .input-area { padding: 10px; }
+            .game-input { font-size: 1rem; padding: 10px; letter-spacing: 1px; }
+            .notifier-content { padding: 1.5rem; max-width: 95%; }
+            .notifier-content h2 { font-size: 1.5rem !important; }
+            .notifier-content p { font-size: 0.9rem !important; }
+            .neon-button { padding: 0.6rem 1.5rem; font-size: 1rem; }
+        }
+
+        @media (max-width: 380px) {
+            .game-hud { gap: 8px; padding: 6px 8px; }
+            .hud-label { font-size: 0.5rem; }
+            .hud-value { font-size: 1rem; }
+            .hud-opponent { padding-left: 8px; }
+            .falling-word { font-size: 0.9rem; padding: 0.25rem 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    
+    <audio id="background-music" loop>
+        <source src="backgroundmusic.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="pop-sound">
+        <source src="popsound.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="countdown-voice">
+        <source src="countdown.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="game-container">
+        
+        <div class="game-hud">
+            <div class="hud-item">
+                <div class="hud-label" style="color: #ff33cc;">SCORE</div>
+                <div id="current-score" class="hud-value">0</div>
+            </div>
+            <div class="hud-divider"></div>
+            <div class="hud-item">
+                <div class="hud-label" style="color: #ffcc00;">TIME</div>
+                <div id="game-timer" class="hud-value">0:00</div>
+            </div>
+            <div id="multiplayer-scores" class="hud-opponent" style="display:none;">
+                <div class="hud-label" style="color: #00ffcc;">OPPONENT</div>
+                <div id="other-players-scores" class="hud-value" style="font-size: 1rem;"></div>
+            </div>
+        </div>
+        
+        <div id="word-drop-area" class="absolute inset-0"></div>
+
+        <div class="input-area">
+            <input type="text" id="type-input" placeholder="TYPE TO ATTACK..." 
+                    class="game-input" autocomplete="off" disabled>
+        </div>
+    </div>
+    
+    <div id="notifier-modal">
+        <div class="notifier-content" id="tutorial-content">
+            <h2 class="text-4xl font-black mb-6">WELCOME WARRIOR</h2>
+            <div class="text-left space-y-4 mb-8 text-lg">
+                <p>The rules are simple, but the challenge is real:</p>
+                <p>● Words are falling. Type them fast.</p>
+                <p>● <span class="text-neon-pink font-bold">Pink Words</span> are your enemies.</p>
+                <p>● Type correctly to turn them <span class="text-neon-cyan font-bold">Cyan</span> and destroy them.</p>
+                <p>● You have 60 seconds to get the highest score!</p>
+            </div>
+            <p class="text-gray-400 mt-4">Waiting for game to start...</p>
+        </div>
+    </div>
+
+    <div id="quit-modal" style="display:none;">
+        <div class="notifier-content">
+            <h2 class="text-4xl font-black mb-6" style="color:#ff33cc;">QUIT MATCH?</h2>
+            <p class="mb-4 text-lg text-gray-300">Are you sure you want to leave?</p>
+            <p class="mb-6 text-neon-pink font-bold">This will count as a LOSS!</p>
+            <div class="flex justify-center gap-4">
+                <button class="neon-button" onclick="hideQuitModal()">CANCEL</button>
+                <button class="neon-button" style="border-color:#ff33cc; color:#ff33cc;" onclick="quitGame()">QUIT</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-over-modal" style="display:none;">
+        <div class="notifier-content">
+            <h2 class="text-5xl font-black mb-2">MATCH ENDED!</h2>
+            <p class="text-2xl mb-6 text-gray-300">Your Score: <span id="final-score" class="font-black text-neon-cyan text-4xl">0</span></p>
+
+            <h3 class="text-xl font-bold mb-2 text-neon-yellow">MATCH RANKING</h3>
+            
+            <div class="leaderboard-table-container">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Warrior</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="game-over-leaderboard-list">
+                        </tbody>
+                </table>
+            </div>
+
+            <p class="text-sm text-gray-400 mt-4">Returning to dashboard in 5 seconds...</p>
+            <div class="flex justify-center gap-4 mt-2">
+                <button class="neon-button" style="border-color:#00ffcc; color:#00ffcc;" onclick="window.location.href='dashboard.html'">GO NOW</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- 1. CONFIG & WORD LIST ---
+        const DEFAULT_USERNAME = 'GUEST_WARRIOR';
+        
+        // Check for multiplayer mode
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameMode = urlParams.get('mode') || 'solo';
+        const roomCode = urlParams.get('room') || sessionStorage.getItem('kw_current_room');
+        const isMultiplayer = gameMode === 'multiplayer' && roomCode;
+        
+        const WORD_LIST = [
+            'ability','absence','academy','account','accused','achieve','acquire','address','advance','adverse','advised','adviser','against','airline','airport','alcohol','alleged','already','analyst','ancient','another','anxiety','anxious','anybody','applied','arrange','arrival','article','assault','assumed','assured','attempt','attract','auction','average','backing','balance','banking','barrier','battery','bearing','beating','because','bedroom','believe','beneath','benefit','besides','between','billion','binding','brother','brought','burning','cabinet','caliber','calling','capable','capital','captain','caption','capture','careful','carrier','caution','ceiling','central','centric','century','certain','chamber','channel','chapter','charity','charlie','charter','checked','chicken','chronic','circuit','classes','classic','climate','closing','clothes','closure','coastal','coating','collect','college','combine','comfort','command','comment','compact','company','compare','compete','complex','concept','concern','concert','conduct','confirm','connect','consent','consist','contact','contain','content','contest','context','control','convert','correct','council','counsel','counter','country','covered','created','creates','creator','credits','crowded','crucial','crystal','culture','current','cutting','dealing','decided','declart','default','defence','deficit','deliver','density','deposit','desktop','despite','destroy','develop','devoted','diamond','digital','discuss','disease','display','dispute','distant','diverse','divided','drawing','driving','dropped','dynamic','earning','eastern','economy','edition','elderly','element','engaged','enhance','enjoyed','enquiry','entered','entitle','episode','equally','erosion','ethical','evening','evident','exactly','examine','example','excited','exclude','exhibit','expense','explain','explore','express','extreme','factory','faculty','failing','failure','fashion','feature','federal','feeling','feeling','fiction','fifteen','fighter','filling','finance','finding','fishing','fitness','foreign','forever','formula','fortune','forward','founder','freedom','further','gallery','gateway','general','genetic','genuine','gigabit','greater','hanging','heading','healthy','hearing','heavily','helpful','helping','herself',
+            'history','holiday','housing','however','illegal','imagine','imaging','improve','include','initial','involve','justice','justify','killing','knowing','leading','learned','leisure','liberal','licence','limited','machine','manager','massive','maximum','meaning','measure','medical','meeting','mention','message','mileage','minimum','missing','mission','mistake','mixture','monitor','monthly','morning','musical','mystery','natural','neither','nervous','network','nothing','noticed','nuclear','offered','opening','operate','opinion','organic','outcome','outside','overall','package','painter','passing','patient','payment','pending','perform','perhaps','phoenix','picture','playing','portray','posiive','pottery','precise','predict','prefers','prepare','present','prevent','primary','printed','private','problem','process','produce','product','profile','program','project','promote','protect','provide','publish','purpose','quality','quarter','radical','railway','readily','reality','receive','recover','reflect','related','release','remains','remarks','respect','respond','revenue','running','satisfy','science','sensing','serious','service','session','setting','seventh','shelter','signing','silence','similar','skilled','society','soldier','someone','special','species','station','storage','strange','stretch','success','suggest','support','surface','surgery','survive','suspect','telling','tendency','thought','through','tonight','totally','tourist','towards','traffic','trainer','trouble','typical','upgrade','utility','variety','various','venture','version','veteran','village','visible','waiting','walking','wanting','warning','warrant','weekend','welcome','whether','willing','winning','without','witness','working','worried','written','younger'
+        ];
+
+        // --- 2. GAME STATE ---
+        let gameActive = false;
+        let isPaused = false;
+        let score = 0;
+        let words = []; 
+        let spawnRate = 2000;
+        let fallSpeed = 0.05; 
+        let lastTime = 0;
+        let spawnTimer = 0;
+        let animationFrameId;
+
+        // --- TIMER VARIABLES ---
+        const GAME_DURATION = 60; 
+        let timeRemaining = GAME_DURATION;
+        let timerIntervalId;
+        let useServerTimer = false; // Flag for multiplayer server-synced timer
+        // -----------------------
+
+        const container = document.getElementById('game-container');
+        const inputField = document.getElementById('type-input');
+        const bgMusic = document.getElementById('background-music');
+        const popSound = document.getElementById('pop-sound');
+        const timerDisplay = document.getElementById('game-timer');
+
+        // --- 3. LEADERBOARD LOGIC (Simplified for 3-Player Match Result) ---
+        
+        function getRankColor(rank) {
+            if (rank === 1) return 'rank-1-color';
+            if (rank === 2) return 'rank-2-color';
+            if (rank === 3) return 'rank-3-color';
+            return 'text-gray-400';
+        }
+
+        function getMatchResults(finalScore) {
+            const username = sessionStorage.getItem('kw_current_user') || DEFAULT_USERNAME; 
+            const player1 = { username: username, score: finalScore }; 
+            let results = [player1];
+            return results;
+        }
+
+        function updateLeaderboardDisplay(listElement, matchResults, currentUsername) {
+            listElement.innerHTML = '';
+            
+            matchResults.forEach((entry, index) => {
+                const rank = index + 1;
+                const isCurrentPlayer = entry.username === currentUsername;
+                
+                const row = document.createElement('tr');
+                row.className = isCurrentPlayer ? 'current-player-row' : '';
+                
+                row.innerHTML = `
+                    <td class="${getRankColor(rank)} font-black">${rank}</td>
+                    <td class="${getRankColor(rank)}">${entry.username} ${isCurrentPlayer ? '(You)' : ''}</td>
+                    <td class="${getRankColor(rank)} text-right">${entry.score}</td>
+                `;
+                listElement.appendChild(row);
+            });
+        }
+
+
+        // --- 4. GAME ENGINE & AUDIO LOGIC ---
+
+        function formatTime(seconds) {
+            const min = Math.floor(seconds / 60);
+            const sec = seconds % 60;
+            return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+        }
+        
+        /**
+         * Checks music status and attempts to play the background music.
+         */
+        function controlBackgroundMusic(action = 'play') {
+            const musicStatus = localStorage.getItem('kw_music_status');
+            if (!bgMusic) return;
+
+            if (action === 'play') {
+                if (musicStatus === 'ON' || musicStatus === null) {
+                    bgMusic.volume = 0.5; // Set volume
+                    bgMusic.play().catch(e => {
+                         console.error("Music playback failed, possibly due to autoplay policy:", e);
+                    });
+                } else {
+                    bgMusic.pause();
+                }
+            } else if (action === 'pause') {
+                bgMusic.pause();
+            }
+        }
+        
+        /**
+         * Plays a sound effect only if kw_sound_status is ON.
+         */
+        function playSoundEffect(audioElement) {
+            // Check for SOUND EFFECT status (assuming 'kw_sound_status' for SFX)
+            const soundStatus = localStorage.getItem('kw_sound_status'); 
+
+            if (audioElement && (soundStatus === 'ON' || soundStatus === null)) {
+                audioElement.currentTime = 0;
+                audioElement.play().catch(()=>{});
+            }
+        }
+        
+        function startTimer() {
+            clearInterval(timerIntervalId);
+            timerDisplay.textContent = formatTime(timeRemaining);
+
+            // Only use local timer if not multiplayer (server handles timer for multiplayer)
+            if (!useServerTimer) {
+                timerIntervalId = setInterval(() => {
+                    if (isPaused) return;
+                    timeRemaining--;
+                    timerDisplay.textContent = formatTime(timeRemaining);
+
+                    if (timeRemaining <= 0) {
+                        clearInterval(timerIntervalId);
+                        if (gameActive) {
+                            gameOver();
+                        }
+                    }
+                }, 1000);
+            }
+        }
+
+        function generateWord() {
+            let minLen = 3;
+            let maxLen = 4;
+
+            if (score >= 60) { minLen = 8; maxLen = 20; } 
+            else if (score >= 45) { minLen = 7; maxLen = 7; } 
+            else if (score >= 30) { minLen = 6; maxLen = 6; } 
+            else if (score >= 15) { minLen = 5; maxLen = 5; }
+
+            const filtered = WORD_LIST.filter(w => w.length >= minLen && w.length <= maxLen);
+            const pool = filtered.length > 0 ? filtered : WORD_LIST;
+
+            return pool[Math.floor(Math.random() * pool.length)];
+        }
+
+        function spawnWord() {
+            const text = generateWord();
+            const el = document.createElement('div');
+            el.className = 'falling-word';
+            el.textContent = text;
+            
+            const maxLeft = container.clientWidth - 150;
+            const x = Math.random() * (maxLeft - 50) + 50;
+            
+            el.style.left = x + 'px';
+            el.style.top = '-50px';
+            
+            document.getElementById('word-drop-area').appendChild(el);
+
+            words.push({
+                element: el,
+                text: text,
+                typed: '',
+                y: -50,
+                speed: fallSpeed + (Math.random() * 0.02) 
+            });
+        }
+
+        function updateGame(time) {
+            if (!gameActive || isPaused) return;
+            
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            const speedTier = Math.floor(score / 10);
+            fallSpeed = 0.05 + (speedTier * 0.03); 
+
+            let targetSpawnRate = Math.max(800, 2000 - (score * 20)); 
+            spawnRate = targetSpawnRate;
+
+            spawnTimer += deltaTime;
+            if (spawnTimer > spawnRate) {
+                spawnWord();
+                spawnTimer = 0;
+            }
+
+            const containerHeight = container.clientHeight;
+            for (let i = words.length - 1; i >= 0; i--) {
+                let w = words[i];
+                
+                w.speed = fallSpeed + (w.speed - fallSpeed); 
+
+                w.y += w.speed * deltaTime;
+                w.element.style.top = w.y + 'px';
+
+                if (w.y > containerHeight - 80) { 
+                    w.element.remove();
+                    words.splice(i, 1);
+                }
+            }
+
+            animationFrameId = requestAnimationFrame(updateGame);
+        }
+
+        function handleInput(e) {
+            if (!gameActive || isPaused) return;
+            
+            const val = inputField.value.trim().toLowerCase();
+            if (!val) return;
+
+            let matchFound = false;
+
+            for (let w of words) {
+                if (w.text.toLowerCase().startsWith(val)) {
+                    matchFound = true;
+                    w.typed = val;
+                    
+                    const remaining = w.text.substring(val.length);
+                    w.element.innerHTML = `<span class="typed">${val}</span>${remaining}`;
+                    
+                    if (val.length === w.text.length) {
+                        destroyWord(w);
+                        inputField.value = '';
+                    }
+                    break;
+                }
+            }
+
+            if (!matchFound) {
+                inputField.style.borderColor = 'red';
+            } else {
+                inputField.style.borderColor = '#ff33cc';
+            }
+        }
+        
+        inputField.addEventListener('keyup', () => {
+             if(inputField.value === '') inputField.style.borderColor = '#ff33cc';
+        });
+
+        function destroyWord(wordObj) {
+            const idx = words.indexOf(wordObj);
+            if (idx > -1) words.splice(idx, 1);
+
+            // FIX: Gumagamit na ng playSoundEffect() function
+            playSoundEffect(popSound);
+
+            wordObj.element.classList.add('hit');
+            setTimeout(() => wordObj.element.remove(), 200);
+
+            score++;
+            document.getElementById('current-score').textContent = score;
+
+            // Send score update to server if multiplayer
+            if (isMultiplayer && socketManager.socket) {
+                socketManager.socket.emit('updateScore', { roomCode: roomCode, score: score });
+            }
+        }
+
+
+        // --- 5. GAME FLOW CONTROLS ---
+
+        // Game is started by server, no manual start button needed
+
+        function initialSequence(callback) {
+            // Ipakita ang modal para sa countdown
+            const modal = document.getElementById('notifier-modal');
+            modal.style.display = 'flex';
+            const content = document.getElementById('tutorial-content');
+            
+            const tempContent = content.innerHTML;
+            
+            // Ihanda ang countdown display
+            content.innerHTML = `
+                <h2 class="text-4xl font-black mb-4 text-neon-yellow">PREPARE!</h2>
+                <p id="countdown-message" class="text-8xl font-black text-neon-pink">...</p>
+            `;
+
+            const messageElement = document.getElementById('countdown-message');
+            const audio = document.getElementById('countdown-voice');
+            
+            let count = 3;
+            const phrases = ["3", "2", "1", "TYPE!"];
+
+            const interval = setInterval(() => {
+                if (count > 0) {
+                    messageElement.textContent = phrases[3 - count];
+                    // FIX: Gumagamit na ng playSoundEffect() function para sa countdown voice
+                    playSoundEffect(audio);
+                    count--;
+                } else if (count === 0) {
+                    messageElement.textContent = phrases[3];
+                    count = -1;
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                        content.innerHTML = tempContent; 
+                        callback(); 
+                    }, 500);
+                    clearInterval(interval);
+                }
+            }, 1000); 
+        }
+
+        function runGame() {
+             // 1. Start Background Music
+             controlBackgroundMusic('play');
+             
+             // 2. Start Game Logic
+             gameActive = true;
+             isPaused = false;
+             inputField.disabled = false;
+             inputField.value = '';
+             inputField.focus();
+             
+             // Timer is controlled by server - just start the game loop
+             lastTime = performance.now();
+             animationFrameId = requestAnimationFrame(updateGame);
+             
+             console.log('Game started! Waiting for server timer...');
+        }
+
+        function startGame() {
+            // Reset State
+            document.getElementById('notifier-modal').style.display = 'none';
+            document.getElementById('game-over-modal').style.display = 'none';
+            document.getElementById('quit-modal').style.display = 'none';
+            document.getElementById('word-drop-area').innerHTML = '';
+            
+            words = [];
+            score = 0;
+            timeRemaining = GAME_DURATION; 
+            fallSpeed = 0.05;
+            isPaused = false;
+            
+            document.getElementById('current-score').textContent = score;
+            timerDisplay.textContent = formatTime(timeRemaining);
+        }
+
+        function showQuitModal() {
+            if (!gameActive) return;
+            document.getElementById('quit-modal').style.display = 'flex';
+        }
+
+        function hideQuitModal() {
+            document.getElementById('quit-modal').style.display = 'none';
+            inputField.focus();
+        }
+
+        function quitGame() {
+            // Leave the room - server will handle giving opponent the win
+            if (socketManager.socket && roomCode) {
+                socketManager.socket.emit('leaveRoom', roomCode);
+            }
+            window.location.href = 'dashboard.html';
+        }
+
+        function gameOver() {
+            gameActive = false;
+            cancelAnimationFrame(animationFrameId);
+            clearInterval(timerIntervalId); 
+            inputField.disabled = true;
+            
+            controlBackgroundMusic('pause'); // Pause music
+            
+            // Display Final Score
+            document.getElementById('final-score').textContent = score;
+
+            // Send final score to server
+            if (isMultiplayer && socketManager.socket) {
+                socketManager.socket.emit('gameFinished', { roomCode: roomCode, finalScore: score });
+            }
+            
+            // Note: gameOver modal will be shown when server sends 'gameOver' event
+        }
+
+        function showGameResults(data) {
+            const currentUsername = sessionStorage.getItem('kw_current_user') || DEFAULT_USERNAME;
+            
+            // Update final score display
+            document.getElementById('final-score').textContent = score;
+            
+            // Display results
+            updateLeaderboardDisplay(document.getElementById('game-over-leaderboard-list'), data.results, currentUsername);
+            
+            // Update modal title based on result
+            const modalTitle = document.querySelector('#game-over-modal h2');
+            
+            if (data.isDraw) {
+                // Draw!
+                modalTitle.textContent = "IT'S A DRAW!";
+                modalTitle.style.color = '#ffcc00'; // Yellow for draw
+            } else {
+                // Winner/Loser
+                const isWinner = data.winner && data.winner.username === currentUsername;
+                const winnerText = isWinner ? 'YOU WIN!' : `${data.winner.username} WINS!`;
+                modalTitle.textContent = winnerText;
+                modalTitle.style.color = isWinner ? '#00ffcc' : '#ff33cc';
+            }
+            
+            // Show Game Over Modal
+            document.getElementById('game-over-modal').style.display = 'flex';
+            
+            // Redirect to dashboard after 5 seconds
+            setTimeout(() => {
+                window.location.href = 'dashboard.html';
+            }, 5000);
+        }
+
+        function showDisconnectWin(data) {
+            const currentUsername = sessionStorage.getItem('kw_current_user') || DEFAULT_USERNAME;
+            
+            // Update final score display
+            document.getElementById('final-score').textContent = score;
+            
+            // Display results with disconnect indicator
+            const leaderboardList = document.getElementById('game-over-leaderboard-list');
+            leaderboardList.innerHTML = '';
+            
+            data.results.forEach((entry, index) => {
+                const rank = index + 1;
+                const isCurrentPlayer = entry.username === currentUsername;
+                const disconnectText = entry.disconnected ? ' (Disconnected)' : '';
+                
+                const row = document.createElement('tr');
+                row.className = isCurrentPlayer ? 'current-player-row' : '';
+                
+                row.innerHTML = `
+                    <td class="${rank === 1 ? 'rank-1-color' : 'rank-2-color'} font-black">${rank}</td>
+                    <td class="${rank === 1 ? 'rank-1-color' : 'text-gray-500'}">${entry.username}${disconnectText} ${isCurrentPlayer ? '(You)' : ''}</td>
+                    <td class="${rank === 1 ? 'rank-1-color' : 'text-gray-500'} text-right">${entry.score}</td>
+                `;
+                leaderboardList.appendChild(row);
+            });
+            
+            // Update modal title for disconnect win
+            const modalTitle = document.querySelector('#game-over-modal h2');
+            if (modalTitle) {
+                modalTitle.textContent = 'OPPONENT LEFT - YOU WIN!';
+                modalTitle.style.color = '#00ffcc';
+            }
+            
+            // Show Game Over Modal
+            document.getElementById('game-over-modal').style.display = 'flex';
+            
+            // Redirect to dashboard after 5 seconds
+            setTimeout(() => {
+                window.location.href = 'dashboard.html';
+            }, 5000);
+        }
+
+        // Initialize game
+        window.addEventListener('load', () => {
+             console.log('Game loaded. Mode:', gameMode, 'Room:', roomCode);
+             
+             // Must be multiplayer with room code
+             if (!isMultiplayer || !roomCode) {
+                 alert('Invalid game session. Returning to dashboard.');
+                 window.location.href = 'dashboard.html';
+                 return;
+             }
+
+             const username = sessionStorage.getItem('kw_current_user');
+             if (!username) {
+                 alert('Please login first.');
+                 window.location.href = 'login.html';
+                 return;
+             }
+
+             // Show loading modal
+             const tutorialContent = document.getElementById('tutorial-content');
+             tutorialContent.innerHTML = `
+                <h2 class="text-4xl font-black mb-6">MULTIPLAYER MATCH</h2>
+                <div class="text-left space-y-4 mb-8 text-lg">
+                    <p>The rules are simple, but the challenge is real:</p>
+                    <p>● Words are falling. Type them fast.</p>
+                    <p>● <span class="text-neon-pink font-bold">Pink Words</span> are your enemies.</p>
+                    <p>● Type correctly to turn them <span class="text-neon-cyan font-bold">Cyan</span> and destroy them.</p>
+                    <p>● You have 60 seconds to get the highest score!</p>
+                    <p class="text-neon-yellow">● Compete against another player in real-time!</p>
+                </div>
+                <p class="text-gray-400" id="status-text">Connecting...</p>
+             `;
+             document.getElementById('notifier-modal').style.display = 'flex';
+
+             // Show multiplayer scores panel
+             document.getElementById('multiplayer-scores').style.display = 'block';
+
+             // Enable server timer sync
+             useServerTimer = true;
+
+             // Connect to Socket.IO
+             const socket = io();
+             socketManager.socket = socket;
+             socketManager.connected = true;
+
+             socket.on('connect', () => {
+                 console.log('Connected to server, rejoining room:', roomCode);
+                 document.getElementById('status-text').textContent = 'Waiting for opponent...';
+                 
+                 // Rejoin the room
+                 socket.emit('rejoinRoom', { roomCode: roomCode, username: username });
+             });
+
+             socket.on('rejoinedRoom', (data) => {
+                 console.log('Rejoined room:', data);
+                 document.getElementById('status-text').textContent = 'Waiting for game to start...';
+             });
+
+             socket.on('error', (data) => {
+                 console.error('Socket error:', data);
+                 alert(data.message || 'Connection error');
+                 window.location.href = 'dashboard.html';
+             });
+
+             // Listen for score updates from other players
+             socket.on('scoresUpdate', (data) => {
+                 updateMultiplayerScores(data.scores);
+             });
+
+             // Listen for server timer updates
+             socket.on('timerUpdate', (data) => {
+                 timeRemaining = data.timeRemaining;
+                 timerDisplay.textContent = formatTime(timeRemaining);
+             });
+
+             // Listen for game started (after countdown)
+             socket.on('gameStarted', (data) => {
+                 console.log('Game started! Time:', data.timeRemaining);
+                 timeRemaining = data.timeRemaining;
+                 timerDisplay.textContent = formatTime(timeRemaining);
+             });
+
+             // Listen for game over from server
+             socket.on('gameOver', (data) => {
+                 console.log('Game over!', data);
+                 gameActive = false;
+                 cancelAnimationFrame(animationFrameId);
+                 inputField.disabled = true;
+                 controlBackgroundMusic('pause');
+                 showGameResults(data);
+             });
+
+             // Listen for opponent disconnect
+             socket.on('opponentDisconnected', (data) => {
+                 console.log('Opponent disconnected!', data);
+                 gameActive = false;
+                 cancelAnimationFrame(animationFrameId);
+                 inputField.disabled = true;
+                 controlBackgroundMusic('pause');
+                 showDisconnectWin(data);
+             });
+
+             // Wait for game start signal from server
+             socket.on('gameStarting', (data) => {
+                 console.log('Game starting with players:', data.players);
+                 document.getElementById('notifier-modal').style.display = 'none';
+                 initialSequence(runGame);
+             });
+        });
+
+        // Function to update multiplayer scores display
+        function updateMultiplayerScores(scores) {
+            const container = document.getElementById('other-players-scores');
+            const currentUsername = sessionStorage.getItem('kw_current_user') || DEFAULT_USERNAME;
+            
+            let opponentScore = 0;
+            Object.entries(scores).forEach(([username, playerScore]) => {
+                if (username !== currentUsername) {
+                    opponentScore = playerScore;
+                }
+            });
+            
+            container.textContent = opponentScore;
+        }
+        
+        inputField.addEventListener('input', handleInput);
+        
+        document.addEventListener('click', (e) => {
+            if(gameActive && !isPaused && !e.target.closest('button')) {
+                inputField.focus();
+            }
+        });
+
+        // ESC key shows quit confirmation
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'Escape' && gameActive) {
+                const quitModal = document.getElementById('quit-modal');
+                if (quitModal.style.display === 'flex') {
+                    hideQuitModal();
+                } else {
+                    showQuitModal();
+                }
+            }
+        });
+
+        // Handle page unload (close tab, refresh, navigate away)
+        window.addEventListener('beforeunload', (e) => {
+            if (gameActive && socketManager.socket && roomCode) {
+                socketManager.socket.emit('leaveRoom', roomCode);
+            }
+        });
+
+    </script>
+</body>
+</html>

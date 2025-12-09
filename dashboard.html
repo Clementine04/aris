@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Keyboard Warrior - Dashboard</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="public/js/socket-client.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter','sans-serif'] },
+                    colors: { 'neon-cyan': '#00ffcc', 'neon-pink': '#ff33cc', 'neon-yellow': '#ffcc00', 'neon-purple': '#bf00ff' } 
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <style>
+        /* Global + Background */
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at center, #050505 0%, #000000 80%);
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            min-height:100vh;
+            margin:0;
+            overflow:hidden;
+        }
+        #matrix-container {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            pointer-events:none; z-index:0;
+        }
+        .particle { position:absolute; transition:opacity .5s ease-out; pointer-events:none; user-select:none; opacity:.9; transform:translate3d(0,0,0); }
+        /* BINAGO: Nilipat ang square color para sa particle sa JS/style */
+        .square { 
+            display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:8px; 
+            font-size:18px; font-weight:700; transition:all .3s ease; 
+            color: #000000; /* Ginawang Black ang font color para sa particles */
+            text-shadow: none;
+        }
+
+        /* Logo */
+        .logo-view-wrapper { display:flex; flex-direction:column; align-items:center; padding:2rem; z-index:10; position:relative; margin-top:-50px; }
+        .text-row { display:flex; gap:.75rem; margin-bottom:.75rem; justify-content:center; }
+        .letter-box {
+            display:flex; justify-content:center; align-items:center;
+            width:4rem; height:4rem; font-size:2rem; font-weight:900;
+            background-color:#000; border:2px solid currentColor; border-radius:6px;
+            text-shadow:0 0 8px rgba(255,255,255,.8), 0 0 5px currentColor;
+            transition:all .4s ease; position:relative; overflow:hidden; z-index:1;
+            animation: subtle-pulse 2s infinite alternate ease-in-out;
+        }
+        @keyframes subtle-pulse {
+            0%{ box-shadow:0 0 5px currentColor,0 0 10px currentColor; transform:scale(1); }
+            100%{ box-shadow:0 0 10px currentColor,0 0 15px currentColor; transform:scale(1.01); }
+        }
+        .keyboard-letter { color:#00ffcc; border-color:#00ffcc; }
+        .warrior-letter { color:#ff33cc; border-color:#ff33cc; }
+        .letter-box:hover, .letter-box.active-glow {
+            box-shadow: inset 0 0 20px currentColor, 0 0 15px currentColor, 0 0 25px currentColor;
+            transform:scale(1.05); animation:none;
+        }
+        
+        /* --- WELCOME NOTIFIER STYLES --- */
+        #welcome-notifier {
+            background-color: rgba(0, 255, 204, 0.1);
+            border: 1px solid #00ffcc;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
+            color: #fff;
+            font-weight: bold;
+            font-size: 1.1rem;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            max-width: 400px;
+            width: 90%;
+            z-index: 11;
+        }
+        #welcome-notifier.show { opacity: 1; }
+        .username-highlight { color: #ff33cc; text-shadow: 0 0 5px #ff33cc; }
+
+
+        /* --- DASHBOARD BUTTON STYLES --- */
+        .buttons-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        
+        .action-btn {
+            padding:.75rem 2rem;
+            font-size:1.25rem;
+            font-weight:900;
+            border-radius:8px;
+            cursor:pointer;
+            text-transform:uppercase;
+            color:var(--button-color);
+            border:2px solid var(--button-color); 
+            background:#000;
+            transition:all .25s ease; 
+            z-index:10; 
+            position:relative;
+            box-shadow:0 0 5px rgba(0,255,204,.06);
+            width: 260px;
+            text-align: center;
+        }
+        
+        .action-btn:hover { 
+            box-shadow: 0 0 10px var(--button-color), 0 0 15px var(--button-color); 
+            transform:scale(1.03); 
+        }
+
+        /* Button Colors */
+        #multiplayer-button { --button-color: #00ffcc; } 
+        #leaderboard-button { --button-color: #ffcc00; } /* Yellow for Leaderboard */
+        #setting-button { --button-color: #bf00ff; }
+
+        .btn-logout { 
+            --button-color: #333;
+            color:#333; 
+            border-color:#333; 
+            background:transparent;
+            font-size:1rem; 
+            margin-top:1.5rem;
+            width: 150px; 
+            box-shadow: none; 
+        }
+        .btn-logout:hover { 
+            color:#fff; 
+            border-color:#fff; 
+            box-shadow:0 0 10px rgba(255,255,255,0.4); 
+            transform:scale(1.03);
+        }
+
+        /* --- MODALS (Settings and Leaderboard) --- */
+        .modal-overlay { 
+            position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); 
+            z-index:100; display:none; justify-content:center; align-items:center; 
+        }
+        .modal-content { 
+            background-color:#0d0d0d; border:2px solid var(--modal-color, #fff); 
+            padding:2rem; border-radius:12px; max-width:650px; width:90%; /* Pinalaki para sa leaderboard */
+            box-shadow:0 0 30px var(--modal-color, #fff); color:#fff; position: relative;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* Settings Specifics */
+        #settings-modal .modal-content { --modal-color: #bf00ff; text-align: center; max-width: 500px; }
+
+        /* Leaderboard Specific Styles (Inilipat mula sa leaderboards.html) */
+        #leaderboard-modal .modal-content { --modal-color: #ffcc00; }
+        .rank-1-color { color: #FFD700; text-shadow: 0 0 5px #FFD700; font-size: 1.5rem; }
+        .rank-2-color { color: #C0C0C0; text-shadow: 0 0 5px #C0C0C0; font-size: 1.3rem; }
+        .rank-3-color { color: #CD7F32; text-shadow: 0 0 5px #CD7F32; font-size: 1.1rem; }
+        .score-highlight { color: #ff33cc; }
+
+
+        /* Toggle Switch CSS */
+        .switch-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 34px; border: 2px solid #555; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #bf00ff; border-color: #bf00ff; box-shadow: 0 0 10px #bf00ff; }
+        input:checked + .slider:before { transform: translateX(26px); }
+
+        /* Settings Sub-Buttons */
+        .sub-btn {
+            display: block; width: 100%; padding: 10px; margin-bottom: 10px;
+            background: #1a1a1a; border: 1px solid #bf00ff; color: #fff;
+            border-radius: 6px; cursor: pointer; transition: 0.3s;
+            font-weight: bold; text-transform: uppercase;
+        }
+        .sub-btn:hover { background: #bf00ff; color: #000; box-shadow: 0 0 15px #bf00ff; }
+
+        @media (max-width:640px) {
+            body { padding: 10px; }
+            .letter-box { width:2.5rem; height:2.5rem; font-size:1.25rem; border-radius:4px; }
+            .text-row { gap: 0.4rem; margin-bottom: 0.4rem; }
+            .logo-view-wrapper { margin-top: 0; padding: 1rem; }
+            .action-btn { padding:.6rem 1.25rem; font-size:1rem; width: 100%; max-width: 280px; }
+            .btn-logout { width: 150px; }
+            .buttons-column { gap: 0.75rem; }
+            #welcome-notifier { font-size: 0.95rem; padding: 0.6rem 1rem; }
+            .modal-content { padding: 1.25rem; max-width: 95%; }
+            .modal-content h2 { font-size: 1.5rem !important; }
+            .leaderboard-table th, .leaderboard-table td { padding: 6px 4px; font-size: 0.8rem; }
+        }
+        
+        @media (max-width:380px) {
+            .letter-box { width:2rem; height:2rem; font-size:1rem; }
+            .text-row { gap: 0.3rem; }
+            .action-btn { font-size: 0.9rem; padding: 0.5rem 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="matrix-container"></div>
+    
+    <audio id="background-music" loop>
+        <source src="backgroundmusic.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="logo-view" class="logo-view-wrapper">
+        <div class="logo-text-area">
+            <div id="keyboard-row" class="text-row"></div>
+            <div id="warrior-row" class="text-row"></div>
+        </div>
+        
+        <div id="welcome-notifier" class=""></div>
+
+        <div class="buttons-column" id="dashboard-buttons">
+            <button id="multiplayer-button" class="action-btn" onclick="window.location.href='multiplayer.html'">Play Game</button>
+            
+            <button id="leaderboard-button" class="action-btn" onclick="showLeaderboard()">Leaderboards</button>
+            
+            <button id="setting-button" class="action-btn" onclick="showSettings()">Settings</button>
+
+            <button id="logout-button" class="action-btn btn-logout" onclick="logout()">Log Out</button>
+        </div>
+    </div>
+
+    <div id="leaderboard-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-4xl font-black text-center mb-6" style="color:#ffcc00">
+                <i class="fas fa-trophy mr-2"></i> GLOBAL LEADERBOARDS
+            </h2>
+            
+            <div class="max-h-[60vh] overflow-y-auto border border-gray-800 rounded-lg p-2">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-gray-700 text-neon-yellow">
+                            <th class="py-2 px-2 font-extrabold">Rank</th>
+                            <th class="py-2 px-2 font-extrabold">Warrior</th>
+                            <th class="py-2 px-2 text-center font-extrabold">W</th>
+                            <th class="py-2 px-2 text-center font-extrabold">L</th>
+                            <th class="py-2 px-2 text-center font-extrabold">D</th>
+                            <th class="py-2 px-2 text-right font-extrabold">Win%</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-list">
+                        <tr><td colspan="6" class="py-4 text-center text-gray-500">Loading scores...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <button class="action-btn mt-6" style="width:100%; --button-color: #ffcc00;" onclick="hideLeaderboard()">Close Leaderboards</button>
+        </div>
+    </div>
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-6" style="color:#bf00ff">SETTINGS</h2>
+            
+            <div class="switch-container">
+                <span class="text-lg font-bold">Music</span>
+                <label class="switch">
+                    <input type="checkbox" id="music-toggle" onchange="toggleMusic()">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+
+            <button class="sub-btn" onclick="window.location.href='about.html'">About</button>
+            <button class="sub-btn" onclick="window.location.href='help.html'">Help</button>
+
+            <button class="action-btn mt-6" style="width:100%; --button-color: #bf00ff;" onclick="hideSettings()">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTS (Kinuha mula sa leaderboards.html) ---
+        const HIGHSCORE_KEY = 'kw_highscores';
+        const MULTIPLAYER_HIGHSCORE_KEY = 'kw_multiplayer_highscores';
+        const CURRENT_USER_KEY = 'kw_current_user';
+        const MUSIC_PREF_KEY = 'kw_music_enabled'; 
+        const MAX_ENTRIES = 50; 
+
+        // --- AUTH & WELCOME ---
+        function displayWelcomeMessage() {
+            const username = sessionStorage.getItem(CURRENT_USER_KEY);
+            const notifier = document.getElementById('welcome-notifier');
+            if (!username) { window.location.href = 'login.html'; return; }
+            notifier.innerHTML = `Welcome <span class="username-highlight">${username}</span>!`;
+            setTimeout(() => { notifier.classList.add('show'); }, 100); 
+            setTimeout(() => { notifier.classList.remove('show'); }, 5000);
+        }
+        function logout() {
+            sessionStorage.removeItem(CURRENT_USER_KEY);
+            window.location.href = 'login.html'; 
+        }
+
+        // --- MUSIC LOGIC (GLOBAL) ---
+        function initMusic() {
+            const audio = document.getElementById('background-music');
+            const toggle = document.getElementById('music-toggle');
+            
+            const musicEnabled = localStorage.getItem(MUSIC_PREF_KEY) !== 'false';
+            
+            if(toggle) toggle.checked = musicEnabled;
+
+            if (musicEnabled) {
+                audio.play().catch(() => { /* Auto-play blocked, waiting for click */ });
+            } else {
+                audio.pause();
+                audio.currentTime = 0;
+            }
+        }
+
+        function toggleMusic() {
+            const toggle = document.getElementById('music-toggle');
+            const isChecked = toggle.checked;
+            const audio = document.getElementById('background-music');
+
+            localStorage.setItem(MUSIC_PREF_KEY, isChecked);
+
+            if (isChecked) {
+                audio.play().catch(e => console.log(e));
+            } else {
+                audio.pause();
+            }
+        }
+
+        // --- MODAL FUNCTIONS (Settings) ---
+        function showSettings() { document.getElementById('settings-modal').style.display = 'flex'; }
+        function hideSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+        
+        // --- MODAL FUNCTIONS (Leaderboards - BAGONG GAWA) ---
+        function showLeaderboard() { 
+            renderLeaderboard(); // Tiyakin na updated ang scores bago ipakita
+            document.getElementById('leaderboard-modal').style.display = 'flex'; 
+        }
+        function hideLeaderboard() { 
+            document.getElementById('leaderboard-modal').style.display = 'none'; 
+        }
+
+        // --- LEADERBOARD LOGIC (Updated to use Server API) ---
+        async function readHighScores() {
+            try {
+                // Fetch leaderboard from server
+                const leaderboard = await API.getLeaderboard();
+                return leaderboard;
+            } catch (e) { 
+                console.error("Error fetching leaderboard:", e);
+                return []; 
+            }
+        }
+
+        function getRankClass(rank) {
+            if (rank === 1) return 'rank-1-color font-extrabold';
+            if (rank === 2) return 'rank-2-color font-bold';
+            if (rank === 3) return 'rank-3-color font-semibold';
+            return 'text-gray-400 font-medium';
+        }
+
+        async function renderLeaderboard() {
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-gray-500">Loading...</td></tr>';
+            
+            const scores = await readHighScores();
+
+            if (scores.length === 0) {
+                list.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-gray-500">No players yet. Be the first!</td></tr>';
+            } else {
+                let html = '';
+                scores.forEach((entry, index) => { 
+                    const rank = index + 1;
+                    const rankClass = getRankClass(rank);
+
+                    html += `
+                        <tr class="border-b border-gray-800 hover:bg-gray-900 transition-colors duration-200">
+                            <td class="py-3 px-2 ${rankClass}">${rank}</td>
+                            <td class="py-3 px-2 text-gray-200">${entry.username}</td>
+                            <td class="py-3 px-2 text-center text-neon-cyan">${entry.wins}</td>
+                            <td class="py-3 px-2 text-center text-neon-pink">${entry.losses || 0}</td>
+                            <td class="py-3 px-2 text-center text-neon-yellow">${entry.draws || 0}</td>
+                            <td class="py-3 px-2 text-right font-bold text-white">${entry.winRate}%</td>
+                        </tr>
+                    `;
+                });
+                list.innerHTML = html;
+            }
+        }
+        
+        // --- ANIMATION (Standard) ---
+        // (Wala itong pagbabago, kopyang-kopya sa orihinal na code mo)
+        const container = document.getElementById('matrix-container');
+        const particles = [];
+        const PARTICLE_COUNT = 100;
+        const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const FALL_SPEED_BASE = 0.05;
+        const GLOW_COLORS = [
+            { background: 'rgba(0,255,240,0.2)', shadow: '0 0 10px rgba(0,255,240,0.6)' },
+            { background: 'rgba(255,0,255,0.2)', shadow: '0 0 10px rgba(255,0,255,0.6)' },
+            { background: 'rgba(0,255,128,0.2)', shadow: '0 0 10px rgba(0,255,128,0.6)' },
+            { background: 'rgba(255,215,0,0.2)', shadow: '0 0 10px rgba(255,215,0,0.6)' },
+        ];
+        let mousePos = { x:-1000, y:-1000 };
+        let interactiveElements = [];
+
+        class Particle {
+            constructor(x,y,letter){
+                this.x=x; this.y=y; this.vx=0; this.vy=FALL_SPEED_BASE; this.letter=letter;
+                this.colorScheme = GLOW_COLORS[Math.floor(Math.random()*GLOW_COLORS.length)];
+                this.element = document.createElement('div');
+                this.element.className = 'particle';
+                this.element.innerHTML = `<div class="square">${letter}</div>`;
+                container.appendChild(this.element);
+                const square = this.element.querySelector('.square');
+                square.style.backgroundColor = this.colorScheme.background;
+                square.style.boxShadow = this.colorScheme.shadow;
+                this.updateDOM();
+            }
+            updateDOM(){ this.element.style.transform = `translate3d(${this.x}px, ${this.y}px, 0)`; }
+            update(deltaTime,width,height){
+                const dx = this.x - mousePos.x, dy = this.y - mousePos.y;
+                const distSq = dx*dx + dy*dy;
+                if (distSq < 32400){ // 180^2
+                    const dist = Math.sqrt(distSq)||1;
+                    const force = (180 - dist)/180 * 0.8;
+                    this.vx += dx/dist * force; this.vy += dy/dist * force;
+                }
+                this.vy += FALL_SPEED_BASE * 0.1;
+                this.vx *= 0.98; this.vy *= 0.98;
+                this.x += this.vx * deltaTime; this.y += this.vy * deltaTime;
+                if (this.y > height + 50){
+                    this.y = -50; this.x = Math.random()*width;
+                    this.letter = LETTERS[Math.floor(Math.random()*LETTERS.length)];
+                    this.colorScheme = GLOW_COLORS[Math.floor(Math.random()*GLOW_COLORS.length)];
+                    const sq = this.element.querySelector('.square');
+                    sq.textContent = this.letter;
+                    sq.style.backgroundColor = this.colorScheme.background;
+                    sq.style.boxShadow = this.colorScheme.shadow;
+                    this.vy = FALL_SPEED_BASE;
+                }
+                if (this.x < -50) this.x = width+50; else if(this.x > width+50) this.x = -50;
+                this.updateDOM();
+            }
+        }
+        
+        function renderLetters(word,id,cls){
+            const el = document.getElementById(id);
+            if (!el || el.children.length>0) return;
+            word.toUpperCase().split('').forEach(ch=>{
+                const box = document.createElement('div');
+                box.textContent=ch; box.classList.add('letter-box',cls); el.appendChild(box);
+            });
+        }
+        let lastTime=0;
+        function animate(time){
+            if(!lastTime) lastTime=time;
+            const dt = (time-lastTime)/16.666; lastTime=time;
+            const w=window.innerWidth, h=window.innerHeight;
+            particles.forEach(p=>p.update(dt,w,h));
+            requestAnimationFrame(animate);
+        }
+        function handleMouseMove(e){ mousePos = {x:e.clientX,y:e.clientY}; checkHover(e.clientX,e.clientY); }
+        function checkHover(x,y){
+            interactiveElements.forEach(el=>{
+                const r=el.getBoundingClientRect();
+                if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) el.classList.add('active-glow');
+                else el.classList.remove('active-glow');
+            });
+        }
+        function handleResize(){ clearTimeout(window.__rt); window.__rt=setTimeout(()=>initBg(),250); }
+
+        function initBg(){
+            renderLetters('KEYBOARD','keyboard-row','keyboard-letter');
+            renderLetters('WARRIOR','warrior-row','warrior-letter');
+            interactiveElements = [
+                ...document.querySelectorAll('.letter-box'), 
+                document.getElementById('multiplayer-button'),
+                document.getElementById('leaderboard-button'),
+                document.getElementById('setting-button'),
+                document.getElementById('logout-button')
+            ];
+            
+            particles.forEach(p=>p.element.remove()); particles.length=0;
+            const w=window.innerWidth, h=window.innerHeight;
+            for(let i=0;i<PARTICLE_COUNT;i++) particles.push(new Particle(Math.random()*w,Math.random()*h,LETTERS[Math.floor(Math.random()*LETTERS.length)]));
+            
+            requestAnimationFrame(animate);
+            
+            initMusic();
+        }
+
+        window.addEventListener('load', () => {
+            initBg();
+            displayWelcomeMessage();
+            
+            // Connect to Socket.IO server
+            socketManager.connect();
+            const username = sessionStorage.getItem(CURRENT_USER_KEY);
+            if (username) {
+                socketManager.authenticate(username);
+            }
+        });
+
+        document.addEventListener('click', () => {
+            const musicEnabled = localStorage.getItem(MUSIC_PREF_KEY) !== 'false';
+            const audio = document.getElementById('background-music');
+            if(musicEnabled && audio.paused) audio.play().catch(()=>{});
+        }, { once: true });
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('resize', handleResize);
+    </script>
+</body>
+</html>
