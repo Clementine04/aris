@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -10,65 +11,284 @@
     <script src="public/js/socket-client.js"></script>
     <script>
         tailwind.config = {
-            theme: { extend: { fontFamily: { sans: ['Inter','sans-serif'] }, colors: { 'neon-cyan': '#00ffcc', 'neon-pink': '#ff33cc' } } }
+            theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] }, colors: { 'neon-cyan': '#00ffcc', 'neon-pink': '#ff33cc' } } }
         }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
 
     <style>
         /* Keep same background + logo styles as other pages */
-        body { font-family:'Inter',sans-serif; background: radial-gradient(circle at center, #050505 0%, #000000 80%); display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0; overflow:hidden; }
-        #matrix-container { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; }
-        .particle { position:absolute; transition:opacity .5s ease-out; pointer-events:none; user-select:none; opacity:.9; transform:translate3d(0,0,0); }
-        .square { display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:8px; font-size:18px; font-weight:700; transition:all .3s ease; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
 
-        .logo-wrapper { display:flex; flex-direction:column; align-items:center; margin-bottom:0.5rem; z-index:10; margin-top:-80px; }
-        .text-row { display:flex; gap:.75rem; margin-bottom:.75rem; justify-content:center; }
-        .letter-box { display:flex; justify-content:center; align-items:center; width:4rem; height:4rem; font-size:2rem; font-weight:900; background-color:#000; border:2px solid currentColor; border-radius:6px; text-shadow:0 0 8px rgba(255,255,255,.8), 0 0 5px currentColor; transition:all .4s ease; position:relative; overflow:hidden; z-index:1; animation: subtle-pulse 2s infinite alternate ease-in-out; }
-        @keyframes subtle-pulse { 0%{ box-shadow:0 0 5px currentColor,0 0 10px currentColor; transform:scale(1);} 100%{ box-shadow:0 0 10px currentColor,0 0 15px currentColor; transform:scale(1.01);} }
-        .keyboard-letter { color:#00ffcc; border-color:#00ffcc; } .warrior-letter { color:#ff33cc; border-color:#ff33cc; }
-        .letter-box:hover, .letter-box.active-glow { box-shadow: inset 0 0 20px currentColor, 0 0 15px currentColor, 0 0 25px currentColor; transform:scale(1.05); animation:none; }
+        /* Background Video */
+        #bg-video {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            transform: translate(-50%, -50%);
+            z-index: -1;
+            object-fit: cover;
+            opacity: 0.6;
+        }
 
-        .main-content-wrapper { z-index:10; display:flex; flex-direction:column; align-items:center; }
-        .neon-card { background-color:#0d0d0d; border:2px solid #333; box-shadow:0 0 25px rgba(0,255,204,0.4); transition:all .3s ease; max-width:400px; width:90%; padding:2rem; border-radius:12px; }
-        .neon-input { width:100%; padding:.75rem; margin-bottom:1rem; background-color:#000; border:1px solid #00ffcc; color:#00ffcc; border-radius:6px; transition:all .2s; outline:none; }
+        #matrix-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            display: none;
+        }
+
+        .square {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 700;
+            transition: all .3s ease;
+        }
+
+        .logo-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            z-index: 10;
+            margin-top: -80px;
+        }
+
+        .text-row {
+            display: flex;
+            gap: .75rem;
+            margin-bottom: .75rem;
+            justify-content: center;
+        }
+
+        .letter-box {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 4rem;
+            height: 4rem;
+            font-size: 2rem;
+            font-weight: 900;
+            background-color: #000;
+            border: 2px solid currentColor;
+            border-radius: 6px;
+            text-shadow: 0 0 8px rgba(255, 255, 255, .8), 0 0 5px currentColor;
+            transition: all .4s ease;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+            animation: subtle-pulse 2s infinite alternate ease-in-out;
+        }
+
+        @keyframes subtle-pulse {
+            0% {
+                box-shadow: 0 0 5px currentColor, 0 0 10px currentColor;
+                transform: scale(1);
+            }
+
+            100% {
+                box-shadow: 0 0 10px currentColor, 0 0 15px currentColor;
+                transform: scale(1.01);
+            }
+        }
+
+        .keyboard-letter {
+            color: #00ffcc;
+            border-color: #00ffcc;
+        }
+
+        .warrior-letter {
+            color: #ff33cc;
+            border-color: #ff33cc;
+        }
+
+        .letter-box:hover,
+        .letter-box.active-glow {
+            box-shadow: inset 0 0 20px currentColor, 0 0 15px currentColor, 0 0 25px currentColor;
+            transform: scale(1.05);
+            animation: none;
+        }
+
+        .main-content-wrapper {
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .neon-card {
+            background-color: #0d0d0d;
+            border: 2px solid #333;
+            box-shadow: 0 0 25px rgba(0, 255, 204, 0.4);
+            transition: all .3s ease;
+            max-width: 400px;
+            width: 90%;
+            padding: 2rem;
+            border-radius: 12px;
+        }
+
+        .neon-input {
+            width: 100%;
+            padding: .75rem;
+            margin-bottom: 1rem;
+            background-color: #000;
+            border: 1px solid #00ffcc;
+            color: #00ffcc;
+            border-radius: 6px;
+            transition: all .2s;
+            outline: none;
+        }
+
         /* Neon Cyan glow on focus */
-        .neon-input:focus { border-color:#00ffcc; box-shadow:0 0 8px #00ffcc; }
+        .neon-input:focus {
+            border-color: #00ffcc;
+            box-shadow: 0 0 8px #00ffcc;
+        }
 
-        .neon-button { width:100%; padding:.75rem; font-weight:700; text-transform:uppercase; border-radius:6px; cursor:pointer; transition:all .3s ease; margin-top:0.5rem; }
-        .btn-login { background-color:#00ffcc; color:#000; border:2px solid #00ffcc; }
-        .btn-login:hover { box-shadow:0 0 15px #00ffcc; transform:translateY(-2px); }
-        .btn-back { background-color:transparent; color:#ff33cc; border:2px solid #ff33cc; }
-        .btn-back:hover { box-shadow:0 0 15px #ff33cc; transform:translateY(-2px); }
+        .neon-button {
+            width: 100%;
+            padding: .75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all .3s ease;
+            margin-top: 0.5rem;
+        }
 
-        .loading-text { color:#00ffcc; text-shadow:0 0 5px #00ffcc; }
+        .btn-login {
+            background-color: #00ffcc;
+            color: #000;
+            border: 2px solid #00ffcc;
+        }
+
+        .btn-login:hover {
+            box-shadow: 0 0 15px #00ffcc;
+            transform: translateY(-2px);
+        }
+
+        .btn-back {
+            background-color: transparent;
+            color: #ff33cc;
+            border: 2px solid #ff33cc;
+        }
+
+        .btn-back:hover {
+            box-shadow: 0 0 15px #ff33cc;
+            transform: translateY(-2px);
+        }
+
+        .loading-text {
+            color: #00ffcc;
+            text-shadow: 0 0 5px #00ffcc;
+        }
 
         /* password field wrapper */
-        .pw-wrap { position:relative; display:flex; align-items:center; }
-        .pw-toggle { position:absolute; right:.5rem; background:none; border:none; cursor:pointer; top:50%; transform:translateY(-50%); color:#00ffcc; padding:.25rem; }
-
-        @media (max-width:640px){
-            body { padding: 15px; }
-            .letter-box { width:2.5rem; height:2.5rem; font-size:1.25rem; }
-            .text-row { gap: 0.4rem; margin-bottom: 0.4rem; }
-            .logo-wrapper { margin-top: 0; margin-bottom: 1rem; }
-            .neon-card { padding: 1.5rem; width: 100%; }
-            .neon-card h1 { font-size: 1.75rem !important; }
-            .neon-input { padding: 0.65rem; font-size: 0.95rem; }
-            .neon-button { padding: 0.65rem; font-size: 0.95rem; }
+        .pw-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
         }
-        
-        @media (max-width:380px){
-            .letter-box { width:2rem; height:2rem; font-size:1rem; }
-            .text-row { gap: 0.3rem; }
+
+        .pw-toggle {
+            position: absolute;
+            right: .5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #00ffcc;
+            padding: .25rem;
+        }
+
+        @media (max-width:640px) {
+            body {
+                padding: 15px;
+            }
+
+            .letter-box {
+                width: 2.5rem;
+                height: 2.5rem;
+                font-size: 1.25rem;
+            }
+
+            .text-row {
+                gap: 0.4rem;
+                margin-bottom: 0.4rem;
+            }
+
+            .logo-wrapper {
+                margin-top: 0;
+                margin-bottom: 1rem;
+            }
+
+            .neon-card {
+                padding: 1.5rem;
+                width: 100%;
+            }
+
+            .neon-card h1 {
+                font-size: 1.75rem !important;
+            }
+
+            .neon-input {
+                padding: 0.65rem;
+                font-size: 0.95rem;
+            }
+
+            .neon-button {
+                padding: 0.65rem;
+                font-size: 0.95rem;
+            }
+        }
+
+        @media (max-width:380px) {
+            .letter-box {
+                width: 2rem;
+                height: 2rem;
+                font-size: 1rem;
+            }
+
+            .text-row {
+                gap: 0.3rem;
+            }
         }
     </style>
 </head>
+
 <body>
     <audio id="background-music" loop autoplay>
         <source src="backgroundmusic.mp3" type="audio/mpeg">
         Your browser does not support the audio element.
     </audio>
+
+    <!-- Background Video -->
+    <video id="bg-video" autoplay muted loop playsinline>
+        <source src="public/Media/bg-video.mp4" type="video/mp4">
+    </video>
 
     <div id="matrix-container"></div>
 
@@ -84,17 +304,25 @@
             <div id="message-box" class="hidden p-3 mb-4 text-sm rounded-md" role="alert"></div>
 
             <div id="auth-form-container">
-                <input id="username-input" type="text" placeholder="USERNAME" class="neon-input" autocomplete="username" />
+                <input id="username-input" type="text" placeholder="USERNAME" class="neon-input"
+                    autocomplete="username" />
 
                 <div class="pw-wrap">
-                    <input id="password-input" type="password" placeholder="PASSWORD" class="neon-input" style="padding-right:2.5rem;" autocomplete="current-password" />
-                    <button id="pw-toggle" class="pw-toggle" aria-label="Toggle password visibility" title="Show/hide password">
-                        <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <input id="password-input" type="password" placeholder="PASSWORD" class="neon-input"
+                        style="padding-right:2.5rem;" autocomplete="current-password" />
+                    <button id="pw-toggle" class="pw-toggle" aria-label="Toggle password visibility"
+                        title="Show/hide password">
+                        <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round">
                             <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"></path>
                             <circle cx="12" cy="12" r="3"></circle>
                         </svg>
-                        <svg id="eye-closed" style="display:none" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.69 21.69 0 0 1 5.06-5.94"></path>
+                        <svg id="eye-closed" style="display:none" xmlns="http://www.w3.org/2000/svg" width="20"
+                            height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.69 21.69 0 0 1 5.06-5.94">
+                            </path>
                             <path d="M1 1l22 22"></path>
                         </svg>
                     </button>
@@ -108,7 +336,8 @@
                 <p class="loading-text">Authenticating...</p>
             </div>
 
-            <p class="text-center text-xs mt-4 text-gray-500"><a href="start.html" onclick="return false" class="hover:text-neon-cyan transition-colors">Keyboard Warrior</a></p>
+            <p class="text-center text-xs mt-4 text-gray-500"><a href="start.html" onclick="return false"
+                    class="hover:text-neon-cyan transition-colors">Keyboard Warrior</a></p>
         </div>
     </div>
 
@@ -117,56 +346,56 @@
         const STORAGE_KEY = 'kw_accounts';
         const CURRENT_USER_KEY = 'kw_current_user'; // Key for Session Storage
 
-        function readAccounts(){
+        function readAccounts() {
             try {
                 const raw = localStorage.getItem(STORAGE_KEY);
                 return raw ? JSON.parse(raw) : {};
             } catch (e) { return {}; }
         }
-        function writeAccounts(obj){
+        function writeAccounts(obj) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
         }
 
         // UI helpers
         const msgBox = document.getElementById('message-box');
-        function showMessage(text, isError=false){
+        function showMessage(text, isError = false) {
             msgBox.textContent = text;
-            msgBox.classList.remove('hidden','bg-red-900','text-red-300','bg-green-900','text-green-300');
-            if(isError){
-                msgBox.classList.add('bg-red-900','text-red-300','border','border-red-500');
+            msgBox.classList.remove('hidden', 'bg-red-900', 'text-red-300', 'bg-green-900', 'text-green-300');
+            if (isError) {
+                msgBox.classList.add('bg-red-900', 'text-red-300', 'border', 'border-red-500');
                 msgBox.style.boxShadow = '0 0 5px rgba(255,0,0,0.5)';
             } else {
-                msgBox.classList.add('bg-green-900','text-green-300','border','border-green-500');
+                msgBox.classList.add('bg-green-900', 'text-green-300', 'border', 'border-green-500');
                 msgBox.style.boxShadow = '0 0 5px rgba(0,255,0,0.5)';
             }
         }
-        function hideMessage(){ msgBox.classList.add('hidden'); }
+        function hideMessage() { msgBox.classList.add('hidden'); }
 
         // Back action
-        function goBack(){ window.location.href = 'start.html'; }
+        function goBack() { window.location.href = 'start.html'; }
 
         // Toggle password visibility
         const pwInput = document.getElementById('password-input');
         const pwToggle = document.getElementById('pw-toggle');
         const eyeOpen = document.getElementById('eye-open');
         const eyeClosed = document.getElementById('eye-closed');
-        pwToggle.addEventListener('click', (e)=>{
+        pwToggle.addEventListener('click', (e) => {
             e.preventDefault();
-            if(pwInput.type === 'password'){ pwInput.type = 'text'; eyeOpen.style.display='none'; eyeClosed.style.display='inline'; }
-            else { pwInput.type = 'password'; eyeOpen.style.display='inline'; eyeClosed.style.display='none'; }
+            if (pwInput.type === 'password') { pwInput.type = 'text'; eyeOpen.style.display = 'none'; eyeClosed.style.display = 'inline'; }
+            else { pwInput.type = 'password'; eyeOpen.style.display = 'inline'; eyeClosed.style.display = 'none'; }
         });
 
         // Login logic - Updated to use API
-        async function login(){
+        async function login() {
             hideMessage();
             const username = document.getElementById('username-input').value.trim();
             const password = document.getElementById('password-input').value;
-            
-            if(!username || !password){
+
+            if (!username || !password) {
                 showMessage('Please enter a username and password.', true);
                 return;
             }
-            if(username.includes('@')){
+            if (username.includes('@')) {
                 showMessage('Emails are not accepted. Please use a username.', true);
                 return;
             }
@@ -178,13 +407,13 @@
             try {
                 // Use API instead of localStorage
                 const result = await API.login(username, password);
-                
+
                 // Store username and stats in session storage
                 sessionStorage.setItem(CURRENT_USER_KEY, result.username);
                 sessionStorage.setItem('kw_user_stats', JSON.stringify(result.stats));
-                
+
                 showMessage('Log In Successful! Redirecting...', false);
-                setTimeout(()=> { window.location.href = 'dashboard.html'; }, 900);
+                setTimeout(() => { window.location.href = 'dashboard.html'; }, 900);
             } catch (error) {
                 showMessage(error.message || 'Login failed. Please try again.', true);
                 document.getElementById('login-button').disabled = false;
@@ -208,13 +437,13 @@
             { background: 'rgba(255,215,0,0.2)', shadow: '0 0 10px rgba(255,215,0,0.6)' },
             { background: 'rgba(200,150,255,0.2)', shadow: '0 0 10px rgba(200,150,255,0.6)' },
         ];
-        let mousePos = { x:-1000, y:-1000 };
+        let mousePos = { x: -1000, y: -1000 };
         let interactiveElements = [];
 
         class Particle {
-            constructor(x,y,letter){
-                this.x=x; this.y=y; this.vx=0; this.vy=FALL_SPEED_BASE; this.letter=letter;
-                this.colorScheme = GLOW_COLORS[Math.floor(Math.random()*GLOW_COLORS.length)];
+            constructor(x, y, letter) {
+                this.x = x; this.y = y; this.vx = 0; this.vy = FALL_SPEED_BASE; this.letter = letter;
+                this.colorScheme = GLOW_COLORS[Math.floor(Math.random() * GLOW_COLORS.length)];
                 this.element = document.createElement('div');
                 this.element.className = 'particle';
                 this.element.innerHTML = `<div class="square">${letter}</div>`;
@@ -225,22 +454,22 @@
                 square.style.color = '#000';
                 this.updateDOM();
             }
-            updateDOM(){ this.element.style.transform = `translate3d(${this.x}px, ${this.y}px, 0)`; }
-            update(deltaTime,width,height){
+            updateDOM() { this.element.style.transform = `translate3d(${this.x}px, ${this.y}px, 0)`; }
+            update(deltaTime, width, height) {
                 const dx = this.x - mousePos.x, dy = this.y - mousePos.y;
-                const distanceSq = dx*dx + dy*dy;
-                if(distanceSq < REPEL_RADIUS*REPEL_RADIUS){
+                const distanceSq = dx * dx + dy * dy;
+                if (distanceSq < REPEL_RADIUS * REPEL_RADIUS) {
                     const distance = Math.sqrt(distanceSq) || 1;
-                    const force = (REPEL_RADIUS - distance)/REPEL_RADIUS * REPEL_STRENGTH;
-                    this.vx += dx/distance * force; this.vy += dy/distance * force;
+                    const force = (REPEL_RADIUS - distance) / REPEL_RADIUS * REPEL_STRENGTH;
+                    this.vx += dx / distance * force; this.vy += dy / distance * force;
                 }
                 this.vy += FALL_SPEED_BASE * 0.1;
                 this.vx *= DAMPING_FACTOR; this.vy *= DAMPING_FACTOR;
                 this.x += this.vx * deltaTime; this.y += this.vy * deltaTime;
-                if(this.y > height + 50){
-                    this.y = -50; this.x = Math.random()*width;
-                    this.letter = LETTERS[Math.floor(Math.random()*LETTERS.length)];
-                    this.colorScheme = GLOW_COLORS[Math.floor(Math.random()*GLOW_COLORS.length)];
+                if (this.y > height + 50) {
+                    this.y = -50; this.x = Math.random() * width;
+                    this.letter = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+                    this.colorScheme = GLOW_COLORS[Math.floor(Math.random() * GLOW_COLORS.length)];
                     const square = this.element.querySelector('.square');
                     square.textContent = this.letter;
                     square.style.backgroundColor = this.colorScheme.background;
@@ -248,16 +477,16 @@
                     square.style.color = '#000';
                     this.vy = FALL_SPEED_BASE;
                 }
-                if(this.x < -50) this.x = width + 50;
-                if(this.x > width + 50) this.x = -50;
+                if (this.x < -50) this.x = width + 50;
+                if (this.x > width + 50) this.x = -50;
                 this.updateDOM();
             }
         }
 
-        const renderLetters = (word,id,className)=>{
+        const renderLetters = (word, id, className) => {
             const el = document.getElementById(id);
-            if(!el || el.children.length>0) return;
-            word.toUpperCase().split('').forEach(ch=>{
+            if (!el || el.children.length > 0) return;
+            word.toUpperCase().split('').forEach(ch => {
                 const box = document.createElement('div');
                 box.textContent = ch;
                 box.classList.add('letter-box', className);
@@ -266,68 +495,69 @@
         };
 
         let lastTime = 0;
-        function animate(time){
-            if(!lastTime) lastTime = time;
-            const deltaTime = (time - lastTime)/16.666; lastTime = time;
+        function animate(time) {
+            if (!lastTime) lastTime = time;
+            const deltaTime = (time - lastTime) / 16.666; lastTime = time;
             const width = window.innerWidth, height = window.innerHeight;
             particles.forEach(p => p.update(deltaTime, width, height));
             requestAnimationFrame(animate);
         }
 
-        function updateGlow(x,y){
+        function updateGlow(x, y) {
             const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
             const hitboxExpansion = isTouch ? 25 : 0;
-            interactiveElements.forEach(el=>{
+            interactiveElements.forEach(el => {
                 const rect = el.getBoundingClientRect();
                 const isOver = x >= rect.left - hitboxExpansion && x <= rect.right + hitboxExpansion &&
-                               y >= rect.top - hitboxExpansion && y <= rect.bottom + hitboxExpansion;
-                if(isOver){ if(isTouch || !el.matches(':hover')) el.classList.add('active-glow'); }
+                    y >= rect.top - hitboxExpansion && y <= rect.bottom + hitboxExpansion;
+                if (isOver) { if (isTouch || !el.matches(':hover')) el.classList.add('active-glow'); }
                 else el.classList.remove('active-glow');
             });
         }
 
-        function handleMouseMove(e){ mousePos = {x:e.clientX,y:e.clientY}; updateGlow(e.clientX,e.clientY); }
-        function handleTouchMove(e){ if(e.touches.length>0){ const t = e.touches[0]; mousePos={x:t.clientX,y:t.clientY}; updateGlow(t.clientX,t.clientY);} }
-        function handleTouchEnd(){ mousePos={x:-1000,y:-1000}; interactiveElements.forEach(el=>el.classList.remove('active-glow')); }
-        function handleResize(){ clearTimeout(window.__resizeT); window.__resizeT = setTimeout(()=> initializeBackground(), 250); }
+        function handleMouseMove(e) { mousePos = { x: e.clientX, y: e.clientY }; updateGlow(e.clientX, e.clientY); }
+        function handleTouchMove(e) { if (e.touches.length > 0) { const t = e.touches[0]; mousePos = { x: t.clientX, y: t.clientY }; updateGlow(t.clientX, t.clientY); } }
+        function handleTouchEnd() { mousePos = { x: -1000, y: -1000 }; interactiveElements.forEach(el => el.classList.remove('active-glow')); }
+        function handleResize() { clearTimeout(window.__resizeT); window.__resizeT = setTimeout(() => initializeBackground(), 250); }
 
         let animationStarted = false;
-        function initializeBackground(){
-            renderLetters('KEYBOARD','keyboard-row','keyboard-letter');
-            renderLetters('WARRIOR','warrior-row','warrior-letter');
+        function initializeBackground() {
+            renderLetters('KEYBOARD', 'keyboard-row', 'keyboard-letter');
+            renderLetters('WARRIOR', 'warrior-row', 'warrior-letter');
             const keyboardLetters = document.querySelectorAll('#keyboard-row .letter-box');
             const warriorLetters = document.querySelectorAll('#warrior-row .letter-box');
             interactiveElements = [...keyboardLetters, ...warriorLetters, document.getElementById('login-button'), document.getElementById('back-button')];
 
-            particles.forEach(p=>p.element.remove()); particles.length = 0;
+            particles.forEach(p => p.element.remove()); particles.length = 0;
             const width = window.innerWidth, height = window.innerHeight;
-            for(let i=0;i<PARTICLE_COUNT;i++){
-                particles.push(new Particle(Math.random()*width, Math.random()*height, LETTERS[Math.floor(Math.random()*LETTERS.length)]));
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                particles.push(new Particle(Math.random() * width, Math.random() * height, LETTERS[Math.floor(Math.random() * LETTERS.length)]));
             }
-            if(!animationStarted){ requestAnimationFrame(animate); animationStarted = true; }
+            if (!animationStarted) { requestAnimationFrame(animate); animationStarted = true; }
         }
 
         // Autoplay fix for music in modern browsers
         const audioEl = document.getElementById('background-music');
         function attemptPlayAudio() {
             if (audioEl && audioEl.paused) {
-                audioEl.play().catch(error => {});
+                audioEl.play().catch(error => { });
             }
         }
-        
+
         window.addEventListener('load', () => {
             initializeBackground();
             attemptPlayAudio();
         });
-        
+
         document.addEventListener('click', attemptPlayAudio, { once: true });
         document.addEventListener('touchstart', attemptPlayAudio, { once: true });
 
 
         window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('touchmove', handleTouchMove, { passive:true });
+        window.addEventListener('touchmove', handleTouchMove, { passive: true });
         window.addEventListener('touchend', handleTouchEnd);
         window.addEventListener('resize', handleResize);
     </script>
 </body>
+
 </html>
