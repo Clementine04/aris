@@ -224,9 +224,7 @@ app.get('/api/leaderboard', (req, res) => {
         }))
         .filter(user => user.gamesPlayed > 0) // Only show players who have played
         .sort((a, b) => {
-            // Sort by wins first, then by winRate, then by highScore
-            if (b.wins !== a.wins) return b.wins - a.wins;
-            if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+            // Sort by highest score (Points)
             return b.highScore - a.highScore;
         })
         .slice(0, 50);
