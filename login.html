@@ -76,6 +76,21 @@
             margin-top: -80px;
         }
 
+        /* School Logos */
+        .school-logos {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .school-logo {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
         .text-row {
             display: flex;
             gap: .75rem;
@@ -294,6 +309,11 @@
 
     <div class="main-content-wrapper">
         <div class="logo-wrapper">
+            <!-- School Logos -->
+            <div class="school-logos">
+                <img src="public/Media/Images/Logo-isu.png" alt="ISU" class="school-logo">
+                <img src="public/Media/Images/logo ccsict.jpg" alt="CCSICT" class="school-logo">
+            </div>
             <div id="keyboard-row" class="text-row"></div>
             <div id="warrior-row" class="text-row"></div>
         </div>

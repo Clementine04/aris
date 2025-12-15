@@ -82,6 +82,33 @@
             margin-top: -50px;
         }
 
+        /* School Logos */
+        .school-logos {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .school-logo {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        @media (max-width: 640px) {
+            .school-logo {
+                width: 45px;
+                height: 45px;
+            }
+
+            .school-logos {
+                gap: 1rem;
+                margin-bottom: 0.75rem;
+            }
+        }
+
         .text-row {
             display: flex;
             gap: .75rem;
@@ -245,6 +272,11 @@
         <source src="backgroundmusic.mp3" type="audio/mpeg">
     </audio>
     <div id="logo-view" class="logo-view-wrapper">
+        <!-- School Logos -->
+        <div class="school-logos">
+            <img src="public/Media/Images/Logo-isu.png" alt="ISU" class="school-logo">
+            <img src="public/Media/Images/logo ccsict.jpg" alt="CCSICT" class="school-logo">
+        </div>
         <div class="logo-text-area">
             <div id="keyboard-row" class="text-row"></div>
             <div id="warrior-row" class="text-row"></div>
