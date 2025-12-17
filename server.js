@@ -115,7 +115,7 @@ class GameRoom {
         this.timeRemaining = GAME_DURATION;
         this.timerInterval = setInterval(() => {
             this.timeRemaining--;
-            
+
             // Broadcast timer to all players
             io.to(this.roomCode).emit('timerUpdate', {
                 timeRemaining: this.timeRemaining
@@ -160,7 +160,7 @@ app.post('/api/register', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     users[username] = {
         username: username,
         password: hashedPassword,
@@ -201,10 +201,10 @@ app.post('/api/login', async (req, res) => {
         return res.status(401).json({ error: 'Invalid password' });
     }
 
-    res.json({ 
-        success: true, 
+    res.json({
+        success: true,
         username: user.username,
-        stats: user.stats 
+        stats: user.stats
     });
 });
 
@@ -262,19 +262,19 @@ io.on('connection', (socket) => {
     // Create room
     socket.on('createRoom', (username) => {
         const roomCode = generateRoomCode();
-        const player = playerSockets.get(socket.id) || { 
-            socketId: socket.id, 
-            username: username 
+        const player = playerSockets.get(socket.id) || {
+            socketId: socket.id,
+            username: username
         };
-        
+
         const room = new GameRoom(roomCode, player);
         activeRooms.set(roomCode, room);
-        
+
         socket.join(roomCode);
         player.roomCode = roomCode;
         playerSockets.set(socket.id, player);
 
-        socket.emit('roomCreated', { 
+        socket.emit('roomCreated', {
             roomCode: roomCode,
             players: room.players,
             playerCount: room.players.length
@@ -304,7 +304,7 @@ io.on('connection', (socket) => {
 
         const player = { socketId: socket.id, username: username };
         room.addPlayer(player);
-        
+
         socket.join(roomCode);
         player.roomCode = roomCode;
         playerSockets.set(socket.id, player);
@@ -359,7 +359,7 @@ io.on('connection', (socket) => {
             // All players ready - start the game!
             room.status = 'playing';
             room.gameStartTime = Date.now();
-            
+
             room.players.forEach(p => {
                 room.scores[p.username] = 0;
             });
@@ -386,17 +386,52 @@ io.on('connection', (socket) => {
 
     // Random matchmaking
     socket.on('findMatch', (username) => {
-        const player = { 
-            socketId: socket.id, 
+        const player = {
+            socketId: socket.id,
             username: username,
             joinedAt: Date.now()
         };
 
-        // Check if there are waiting players
+        // Clean up stale sockets from the queue before matching
+        // Remove players whose sockets are no longer connected
+        while (matchmakingQueue.length > 0) {
+            const waitingPlayer = matchmakingQueue[0];
+            const waitingSocket = io.sockets.sockets.get(waitingPlayer.socketId);
+
+            // Check if socket is still connected
+            if (!waitingSocket || !waitingSocket.connected) {
+                matchmakingQueue.shift(); // Remove stale player
+                console.log(`Removed stale player ${waitingPlayer.username} from matchmaking queue`);
+                continue;
+            }
+
+            // Also check if player has been waiting too long (5 minutes timeout)
+            if (Date.now() - waitingPlayer.joinedAt > 5 * 60 * 1000) {
+                matchmakingQueue.shift();
+                waitingSocket.emit('matchmakingTimeout', { message: 'Matchmaking timed out. Please try again.' });
+                console.log(`Removed timed-out player ${waitingPlayer.username} from matchmaking queue`);
+                continue;
+            }
+
+            // Found a valid player
+            break;
+        }
+
+        // Check if there are valid waiting players
         if (matchmakingQueue.length >= 1) {
             // Create a room with 2 players
             const player1 = matchmakingQueue.shift();
-            
+            const player1Socket = io.sockets.sockets.get(player1.socketId);
+
+            // Double-check player1's socket is still valid
+            if (!player1Socket || !player1Socket.connected) {
+                // Player1 disconnected, add current player to queue instead
+                matchmakingQueue.push(player);
+                socket.emit('searching', { position: matchmakingQueue.length });
+                console.log(`${username} added to matchmaking queue (opponent disconnected)`);
+                return;
+            }
+
             const roomCode = generateRoomCode();
             const room = new GameRoom(roomCode, player1);
             room.addPlayer(player);
@@ -404,17 +439,27 @@ io.on('connection', (socket) => {
             activeRooms.set(roomCode, room);
 
             // Add all players to the room
+            let allPlayersJoined = true;
             [player1, player].forEach(p => {
                 const sock = io.sockets.sockets.get(p.socketId);
-                if (sock) {
+                if (sock && sock.connected) {
                     sock.join(roomCode);
-                    const playerData = playerSockets.get(p.socketId);
-                    if (playerData) {
-                        playerData.roomCode = roomCode;
-                        playerSockets.set(p.socketId, playerData);
-                    }
+                    const playerData = playerSockets.get(p.socketId) || { socketId: p.socketId, username: p.username };
+                    playerData.roomCode = roomCode;
+                    playerSockets.set(p.socketId, playerData);
+                } else {
+                    allPlayersJoined = false;
                 }
             });
+
+            if (!allPlayersJoined) {
+                // Clean up if not all players joined
+                activeRooms.delete(roomCode);
+                matchmakingQueue.push(player);
+                socket.emit('searching', { position: matchmakingQueue.length });
+                console.log(`Match creation failed, ${username} re-added to queue`);
+                return;
+            }
 
             io.to(roomCode).emit('matchFound', {
                 roomCode: roomCode,
@@ -423,7 +468,7 @@ io.on('connection', (socket) => {
             });
 
             console.log(`Match found! Room ${roomCode} created with 2 players`);
-            
+
             // Initialize ready tracking for random match
             room.readyPlayers = new Set();
 
@@ -447,7 +492,7 @@ io.on('connection', (socket) => {
     // Start game
     socket.on('startGame', (roomCode) => {
         const room = activeRooms.get(roomCode);
-        
+
         if (!room) {
             socket.emit('error', { message: 'Room not found' });
             return;
@@ -484,7 +529,7 @@ io.on('connection', (socket) => {
         setTimeout(() => {
             if (room.status === 'playing') {
                 console.log(`Starting timer for room ${roomCode}`);
-                
+
                 // Send game started signal
                 io.to(roomCode).emit('gameStarted', {
                     timeRemaining: GAME_DURATION
@@ -510,7 +555,7 @@ io.on('connection', (socket) => {
 
         // Get results sorted by score
         const results = room.getResults();
-        
+
         // Check for draw
         const isDraw = results.length >= 2 && results[0].score === results[1].score;
         const winner = isDraw ? null : results[0];
@@ -548,7 +593,7 @@ io.on('connection', (socket) => {
 
         if (room && player && room.status === 'playing') {
             room.updateScore(player.username, score);
-            
+
             // Broadcast scores to all players
             io.to(roomCode).emit('scoresUpdate', {
                 scores: room.scores
@@ -575,7 +620,7 @@ io.on('connection', (socket) => {
     // Disconnect
     socket.on('disconnect', () => {
         const player = playerSockets.get(socket.id);
-        
+
         if (player) {
             // Remove from matchmaking queue
             const queueIndex = matchmakingQueue.findIndex(p => p.socketId === socket.id);
@@ -612,55 +657,55 @@ function generateRoomCode() {
 function handlePlayerLeave(socket, roomCode) {
     const room = activeRooms.get(roomCode);
     const leavingPlayer = playerSockets.get(socket.id);
-    
+
     if (room) {
         // If game is in progress, the remaining player wins
         if (room.status === 'playing' && room.players.length === 2) {
             room.stopTimer();
             room.status = 'finished';
-            
+
             // Find the remaining player (winner)
             const remainingPlayer = room.players.find(p => p.socketId !== socket.id);
             const leavingPlayerName = leavingPlayer ? leavingPlayer.username : 'Opponent';
-            
+
             if (remainingPlayer) {
                 // Set scores - winner gets their current score, leaver gets 0
                 const winnerScore = room.scores[remainingPlayer.username] || 0;
                 room.scores[leavingPlayerName] = 0;
-                
+
                 const results = [
                     { username: remainingPlayer.username, score: winnerScore },
                     { username: leavingPlayerName, score: 0, disconnected: true }
                 ];
-                
+
                 // Update user stats
                 updateUserStats(results);
-                
+
                 // Save match
                 saveMatch(room, results);
-                
+
                 // Notify remaining player they won
                 io.to(roomCode).emit('opponentDisconnected', {
                     results: results,
                     winner: results[0],
                     message: `${leavingPlayerName} disconnected. You win!`
                 });
-                
+
                 console.log(`${leavingPlayerName} disconnected from room ${roomCode}. ${remainingPlayer.username} wins!`);
             }
-            
+
             // Clean up room after delay
             setTimeout(() => {
                 activeRooms.delete(roomCode);
                 console.log(`Room ${roomCode} cleaned up after disconnect`);
             }, 3000);
-            
+
         } else {
             // Game not in progress - normal leave
             const remainingPlayers = room.removePlayer(socket.id);
-            
+
             socket.leave(roomCode);
-            
+
             if (remainingPlayers === 0) {
                 // Delete empty room
                 room.stopTimer();
@@ -686,10 +731,10 @@ function updateUserStats(results, isDraw = false) {
             // Initialize missing stats
             if (user.stats.draws === undefined) user.stats.draws = 0;
             if (user.stats.losses === undefined) user.stats.losses = 0;
-            
+
             user.stats.gamesPlayed += 1;
             user.stats.totalScore += result.score;
-            
+
             if (isDraw) {
                 // Draw - no winner
                 user.stats.draws += 1;
@@ -707,8 +752,8 @@ function updateUserStats(results, isDraw = false) {
 
             // Win rate = wins / (games - draws) * 100
             const gamesWithResult = user.stats.gamesPlayed - user.stats.draws;
-            user.stats.winRate = gamesWithResult > 0 
-                ? (user.stats.wins / gamesWithResult * 100).toFixed(2) 
+            user.stats.winRate = gamesWithResult > 0
+                ? (user.stats.wins / gamesWithResult * 100).toFixed(2)
                 : 0;
         }
     });
@@ -718,7 +763,7 @@ function updateUserStats(results, isDraw = false) {
 
 function saveMatch(room, results, isDraw = false) {
     const matches = readDB(MATCHES_DB);
-    
+
     matches.push({
         matchId: uuidv4(),
         roomCode: room.roomCode,

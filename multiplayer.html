@@ -524,6 +524,9 @@
                 socketManager.connect();
             }
 
+            // Reset any leftover state from previous games
+            socketManager.resetState();
+
             const username = sessionStorage.getItem(CURRENT_USER_KEY);
             if (username) {
                 socketManager.authenticate(username);
@@ -577,6 +580,12 @@
                     sessionStorage.setItem('kw_current_room', data.roomCode);
                     sessionStorage.setItem('kw_room_players', JSON.stringify(data.players));
                     window.location.href = `keyboardwarriorgame.html?mode=multiplayer&room=${data.roomCode}`;
+                },
+                (data) => {
+                    // Matchmaking timed out
+                    clearInterval(searchInterval);
+                    document.getElementById('notifier-modal').style.display = 'none';
+                    alert(data.message || 'Matchmaking timed out. Please try again.');
                 }
             );
         }
